@@ -21,6 +21,7 @@ namespace BlackAlert
 
         private readonly List<Agent> agents = new List<Agent>();
         private Camera cam;
+        private BlackAlertTerrain physicalTerrain;
         private Vector3 camFocus = new Vector3(0, 0, 0);
         private float camHeight = 53f;
         private Agent selected;
@@ -77,17 +78,21 @@ namespace BlackAlert
 
         private void BuildGround()
         {
-            Cube("Walkable battlefield", new Vector3(0,-0.6f,0), new Vector3(100,1,90), earthMat);
-            // Narrow ford intentionally slows ground units; bank elevations are visible.
-            Cube("Shallow river", new Vector3(0,-0.015f,0), new Vector3(5,0.05f,89), waterMat);
-            Cube("West bridge", new Vector3(0,0.15f,-20), new Vector3(7,0.35f,5), NewMaterial(new Color(0.5f,0.47f,0.4f)));
-            Cube("East bridge", new Vector3(0,0.15f,20), new Vector3(7,0.35f,5), NewMaterial(new Color(0.5f,0.47f,0.4f)));
-            for (int i = 0; i < 14; i++)
+            var world = new GameObject("Black Alert - 3D landscape / physics");
+            physicalTerrain = world.AddComponent<BlackAlertTerrain>();
+            physicalTerrain.Build();
+            Cube("Water material under surface", new Vector3(0,-2.9f,0),
+                new Vector3(100,0.1f,90), waterMat);
+            for (int z = -42; z <= 42; z += 3)
             {
-                float z = -39 + i * 6f;
-                float x = i % 2 == 0 ? -43f : 43f;
-                Cube("Rocky ridge", new Vector3(x,1.5f,z), new Vector3(8,3 + i % 3 * 2,5), NewMaterial(new Color(0.30f,0.29f,0.26f)));
+                float start = physicalTerrain.RiverCenter(z);
+                Cube("Water river", new Vector3(start,.02f,z+1.5f),
+                    new Vector3(5.2f,.09f,3.1f), waterMat);
             }
+            var bridgeMat = NewMaterial(new Color(.36f,.35f,.32f));
+            foreach (int z in new int[] {-20,20})
+                Cube("Steel river bridge", new Vector3(physicalTerrain.RiverCenter(z),.35f,z),
+                    new Vector3(9f,.55f,5.1f),bridgeMat);
         }
 
         private void BuildLighting()
@@ -213,12 +218,26 @@ namespace BlackAlert
                 }
                 if(a.enemy && enemy!=null && best<190f) a.goal=enemy.model.transform.position;
                 var position=a.model.transform.position;
-                var flatGoal=new Vector3(a.goal.x,a.altitude,a.goal.z);
+                var flatGoal=new Vector3(a.goal.x, a.altitude>2f ? a.altitude : .6f + (physicalTerrain!=null ? physicalTerrain.Height(a.goal.x,a.goal.z) : 0), a.goal.z);
                 var diff=flatGoal-position;
                 if(diff.sqrMagnitude>4.5f && (enemy==null || best>70f || !a.enemy))
                 {
-                    float inRiver=a.altitude>2f?1f:(Mathf.Abs(position.x)<3.5f?0.5f:1f);
-                    position=Vector3.MoveTowards(position,flatGoal,Time.deltaTime*a.speed*inRiver);
+                    float speedFactor=1f;
+                    if(physicalTerrain!=null && a.altitude<=2f)
+                    {
+                        bool infantry = a.model.name.Contains("Rifleman");
+                        bool tracked = !infantry;
+                        var probe=Vector3.MoveTowards(position,flatGoal,Time.deltaTime*a.speed);
+                        if(!physicalTerrain.CanCross(probe,infantry,tracked))
+                        {
+                            a.goal=position;
+                            continue;
+                        }
+                        speedFactor=physicalTerrain.SpeedFactor(position,infantry,tracked);
+                    }
+                    position=Vector3.MoveTowards(position,flatGoal,Time.deltaTime*a.speed*speedFactor);
+                    if(a.altitude<=2f && physicalTerrain!=null)
+                        position.y = .6f+physicalTerrain.Height(position.x,position.z);
                     a.model.transform.position=position;
                     if(diff.sqrMagnitude>0.1f) a.model.transform.rotation=Quaternion.Slerp(a.model.transform.rotation,Quaternion.LookRotation(diff),Time.deltaTime*4f);
                 }
