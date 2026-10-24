@@ -1,0 +1,25 @@
+name: Unity C# syntax (no Unity minutes)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Assets/**/*.cs'
+      - 'Tools/UnitySyntaxChecks/**'
+      - '.github/workflows/unity-syntax.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parse-unity-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Parse Unity Android and Editor C# with Roslyn (no Unity editor)
+        run: dotnet run --configuration Release --project Tools/UnitySyntaxChecks/UnitySyntaxChecks.csproj
