@@ -43,7 +43,7 @@ namespace BlackAlert
         private int enemyHQ = 1;
         private float battleTime;
         private int shotsFired;
-        private float credits=5500;
+        private RtsEconomy economy;
         private float nuclearReadyAt;
         private bool targetingNuclear;
 
@@ -79,6 +79,7 @@ namespace BlackAlert
             BuildGround();
             BuildLighting();
             BuildBases();
+            StartEconomy();
             CreateStartingArmies();
             modeController=gameObject.AddComponent<BlackAlertPlayableModes>();
             modeController.Initialize(this);
@@ -104,13 +105,32 @@ namespace BlackAlert
                 SpawnShip(new Vector3(0,.7f,35f),true);
         }
 
+        private void StartEconomy()
+        {
+            economy=new RtsEconomy(5500);
+            economy.AddOreNode("Azure Ore Field",5000);
+            economy.AssignHarvester("Azure Ore Field");
+        }
+
+        private void DeliverProduction(string id)
+        {
+            switch(id)
+            {
+                case "rifleman": SpawnInfantry(new Vector3(-26,0,Random.Range(-16f,16f)),false);break;
+                case "tank": Spawn(new Vector3(-27,0,Random.Range(-16f,16f)),false);break;
+                case "helicopter": SpawnHelicopter(new Vector3(-27,7,Random.Range(-16f,16f)),false);break;
+                case "jet": SpawnJet(new Vector3(-27,13,Random.Range(-16f,16f)),false);break;
+                case "destroyer": SpawnShip(new Vector3(0,.7f,-32),false);break;
+            }
+        }
+
         public void RestartBattle()
         {
             StopAllCoroutines();
             foreach(var unit in agents)if(unit.model!=null)Destroy(unit.model);
             agents.Clear();
             selected=null;
-            credits=5500;
+            StartEconomy();
             battleTime=0;
             shotsFired=0;
             targetingNuclear=false;
@@ -199,7 +219,7 @@ namespace BlackAlert
                     camFocus=enemyCenter;AlignCamera();
                     break;
                 case CardEffect.Supply:
-                    credits+=900;
+                    economy.AddCredits(900);
                     break;
                 case CardEffect.Reinforce:
                 case CardEffect.Decoy:
@@ -211,8 +231,8 @@ namespace BlackAlert
                         ApplyDamage(a,30f);
                     break;
                 case CardEffect.NuclearJammer:
-                    // Opponent superweapon cooldown logic is not yet integrated.
-                    credits+=500;
+                    // Enemy nuclear availability is not yet implemented; this is a temporary energy refund.
+                    economy.AddCredits(500);
                     break;
             }
         }
@@ -309,7 +329,11 @@ namespace BlackAlert
         private void Update()
         {
             battleTime += Time.deltaTime;
-            credits += Time.deltaTime*5f;
+            if(economy!=null)
+            {
+                economy.Tick(Time.deltaTime);
+                foreach(string unit in economy.CollectCompleted())DeliverProduction(unit);
+            }
             UpdateInput();
             Simulate();
         }
@@ -365,9 +389,8 @@ namespace BlackAlert
             if(targetingNuclear)
             {
                 targetingNuclear=false;
-                if(credits>=3800f && Time.time>=nuclearReadyAt)
+                if(economy!=null && Time.time>=nuclearReadyAt && economy.TrySpend(3800))
                 {
-                    credits-=3800f;
                     nuclearReadyAt=Time.time+80f;
                     StartCoroutine(NuclearStrikeAt(hit.point));
                 }
@@ -588,27 +611,40 @@ namespace BlackAlert
             GUI.Label(new Rect(20, 20, 520, 55), "BLACK ALERT / 3D LIVE COMBAT LAB");
             GUI.Label(new Rect(20, 82, 420, 30), "SKIRMISH TECH TEST — NOT FINAL ART");
             GUI.Label(new Rect(20, 105, 700, 30), "Tap any Azure unit, then ground to move. Two fingers pan / pinch zoom.");
-            GUI.Label(new Rect(20, 132, 700, 30), "Credits "+(int)credits+"  Shots "+shotsFired+
-                "  Time "+battleTime.ToString("0")+"s");
+            GUI.Label(new Rect(20, 132, 780, 30), "Credits "+economy.Credits+
+                " | Power "+economy.PowerGenerated+"/"+economy.PowerConsumed+
+                " | Ore "+economy.Ore["Azure Ore Field"].Remaining+
+                " | Shots "+shotsFired+" | Time "+battleTime.ToString("0")+"s");
             GUI.Label(new Rect(20, 160, 700, 30), selected!=null&&selected.model!=null?
                 "Selected: "+selected.model.name:"Select an Azure unit to command");
-            if(GUI.Button(new Rect(20, 195, 195, 55), "BUILD TANK $700") && credits>=700)
-            {credits-=700;Spawn(new Vector3(-28,0,Random.Range(-20f,20f)),false);}
-            if(GUI.Button(new Rect(20, 257, 195, 55), "RIFLEMAN $100") && credits>=100)
-            {credits-=100;SpawnInfantry(new Vector3(-27,0,Random.Range(-19f,19f)),false);}
-            if(GUI.Button(new Rect(20, 319, 195, 55), "HELICOPTER $1200") && credits>=1200)
-            {credits-=1200;SpawnHelicopter(new Vector3(-27,7,Random.Range(-19f,19f)),false);}
-            if(GUI.Button(new Rect(20, 381, 195, 55), "JET $1600") && credits>=1600)
-            {credits-=1600;SpawnJet(new Vector3(-28,13,Random.Range(-19f,19f)),false);}
-            if(GUI.Button(new Rect(20, 443, 195, 55), "DESTROYER $2200") && credits>=2200)
-            {credits-=2200;SpawnShip(new Vector3(0,.7f,-32),false);}
+            if(GUI.Button(new Rect(20, 195, 195, 55), "QUEUE TANK $700"))
+                economy.QueueUnit("tank");
+            if(GUI.Button(new Rect(20, 257, 195, 55), "RIFLEMAN $100"))
+                economy.QueueUnit("rifleman");
+            if(GUI.Button(new Rect(20, 319, 195, 55), "HELICOPTER $1200"))
+                economy.QueueUnit("helicopter");
+            if(GUI.Button(new Rect(20, 381, 195, 55), "JET $1600"))
+            {
+                if(!economy.QueueUnit("jet"))Debug.Log("[BlackAlert] Jet requires tech building.");
+            }
+            if(GUI.Button(new Rect(20, 443, 195, 55), "DESTROYER $2200"))
+                economy.QueueUnit("destroyer");
             var nukeLabel=Time.time<nuclearReadyAt ?
                 "NUKE RECHARGING "+Mathf.CeilToInt(nuclearReadyAt-Time.time)+"s":
                 targetingNuclear ? "TAP TARGET ON MAP" : "NUCLEAR $3800";
             if(GUI.Button(new Rect(20,505,195,55),nukeLabel) &&
-                Time.time>=nuclearReadyAt && credits>=3800)
+                Time.time>=nuclearReadyAt && economy.Credits>=3800)
                 targetingNuclear=!targetingNuclear;
-            GUI.Label(new Rect(20,574,680,40), "TEST GEOMETRY - NOT FINAL GRAPHICS OR ONLINE PLAY");
+            if(GUI.Button(new Rect(20,565,195,40),"TECH CENTER $1600"))
+                economy.BuildStructure("tech");
+            if(GUI.Button(new Rect(20,608,195,40),"NEW REACTOR $900"))
+                economy.BuildStructure("reactor");
+            GUI.Label(new Rect(20,653,710,28),
+                "Production "+economy.PendingUnits+" | "+
+                (economy.FirstQueuedUnit??"Idle")+" "+
+                economy.FirstQueueRemaining.ToString("0.0")+"s"+
+                (economy.LowPower?" | LOW POWER":""));
+            GUI.Label(new Rect(20,686,680,28),"Offline game systems test | final graphics + online pending");
         }
     }
 }
