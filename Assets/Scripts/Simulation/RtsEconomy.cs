@@ -91,6 +91,19 @@ namespace BlackAlert.Simulation
         {
             return buildings.TryGetValue(id,out int n) ? n : 0;
         }
+        public bool TrySpend(int amount)
+        {
+            if(amount<0)throw new ArgumentOutOfRangeException(nameof(amount));
+            if(amount>Credits)return false;
+            Credits-=amount;
+            return true;
+        }
+        public void AddCredits(int amount)
+        {
+            if(amount<0)throw new ArgumentOutOfRangeException(nameof(amount));
+            Credits=checked(Credits+amount);
+        }
+
         public bool BuildStructure(string id)
         {
             int cost,power;
@@ -155,7 +168,7 @@ namespace BlackAlert.Simulation
             }
             if(production.Count>0)
             {
-                double effective=seconds*(LowPower?.25:1);
+                double effective=seconds*(LowPower ? 0.25 : 1.0);
                 while(effective>0 && production.Count>0)
                 {
                     var active=production.Peek();
