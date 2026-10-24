@@ -231,7 +231,7 @@ static class Program
         Assert(defended.Strategy==AiStrategy.Defend,"AI defends base from spotted enemies");
         Assert(defended.Orders.Count==ours.Length,"AI emits an order for each live unit");
         var retreat=brain.Decide(Intel(BattleMode.Skirmish,2000,false,2,0,
-            new []{new AiUnitIntel(9,AiUnitType.Tank,14,7,.5f)}));
+            new []{new AiUnitIntel(9,AiUnitType.Tank,-4,7,.5f)}));
         Assert(retreat.Orders.Any(o=>o.UnitId==2 && o.Action==AiOrderType.Retreat),
             "damaged infantry retreat toward the base");
         Assert(retreat.Orders.Any(o=>o.UnitId==5 && o.Action==AiOrderType.Guard),
