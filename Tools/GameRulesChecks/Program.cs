@@ -262,6 +262,23 @@ static class Program
             "survival AI navigates toward shrinking storm center");
         ExpectError(()=>new TacticalCommanderBrain(4),"invalid AI difficulty rejected");
 
+        var stronghold=new StrongholdBattle(1200);
+        Assert(stronghold.Health(0)==1200 && stronghold.Health(1)==1200,
+            "both RTS headquarters begin with full structural health");
+        Assert(stronghold.Damage(1,500)==500 && !stronghold.Finished,
+            "HQ takes damage but fight continues while base survives");
+        Assert(stronghold.Damage(1,900)==700 && stronghold.Finished &&
+            stronghold.Winner==0,"destroying opposing headquarters declares the winning faction");
+        Assert(stronghold.Damage(0,200)==0,
+            "finished match ignores extra incoming attacks");
+        stronghold.Reset();
+        Assert(!stronghold.Finished && stronghold.Health(0)==1200 &&
+            stronghold.Health(1)==1200,"restarting battle restores both headquarters");
+        ExpectError(()=>stronghold.Damage(2,5),
+            "base damage rejects unknown factions");
+        ExpectError(()=>stronghold.Damage(0,-5),
+            "negative base damage cannot heal a base");
+
         Console.WriteLine("All "+successes+" headless simulation assertions passed. These do not validate Unity editor or APK.");
     }
 }
