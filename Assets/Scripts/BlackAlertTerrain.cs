@@ -58,7 +58,7 @@ namespace BlackAlert
         public float SpeedFactor(Vector3 at, bool infantry, bool tracked)
         {
             if(IsBridge(at)) return 1.15f;
-            if(IsWater(at)) return infantry?.48f:tracked?.52f:.22f;
+            if(IsWater(at)) return infantry ? 0.48f : (tracked ? 0.52f : 0.22f);
             float grade=SlopeDegrees(at);
             float gradePenalty=infantry?grade*.010f:tracked?grade*.017f:grade*.025f;
             return Mathf.Clamp((OnRoad(at)?1.2f:1f)-gradePenalty,.23f,1.25f);
