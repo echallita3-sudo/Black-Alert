@@ -177,6 +177,38 @@ static class Program
             .Find(new GridCell(0,0),new GridCell(2,2)),
             "reject invalid terrain movement penalties");
 
+        var intel=new FogOfWarGrid(32,24);
+        Assert(intel.Get(0,2,3)==IntelState.Unknown,"fog begins unexplored");
+        intel.Reveal(0,8,8,4);
+        Assert(intel.IsVisible(0,8,8) && intel.IsVisible(0,10,8),
+            "friendly scouts reveal tiles in their radius");
+        Assert(!intel.IsVisible(0,16,8) && !intel.IsVisible(1,8,8),
+            "visibility has finite range and does not leak to another faction");
+        intel.BeginFrame(0);
+        Assert(intel.Get(0,8,8)==IntelState.Explored && !intel.IsVisible(0,8,8),
+            "out-of-sight cells become remembered but not currently visible");
+        intel.Reveal(0,10,8,2);
+        Assert(intel.IsVisible(0,8,8) && intel.IsVisible(0,10,8),
+            "a moving scout re-reveals previously explored cells");
+        var fogMemory=new byte[32*24];
+        intel.CopyState(0,fogMemory);
+        Assert(fogMemory[8*32+8]==(byte)IntelState.Visible,
+            "headless fog snapshot exposes only authorized faction knowledge");
+        ExpectError(()=>intel.CopyState(0,new byte[8]),
+            "fog snapshot rejects invalid buffer length");
+        ExpectError(()=>intel.Reveal(0,5,5,-1),
+            "fog refuses a negative vision range");
+        var ridge=new FogOfWarGrid(16,16,(x,y)=>x==8);
+        ridge.Reveal(0,4,8,10);
+        Assert(ridge.IsVisible(0,8,8),"blocking ridge itself is visible");
+        Assert(!ridge.IsVisible(0,11,8),"units behind a ridge stay concealed");
+        ridge.BeginFrame(0);
+        ridge.Reveal(1,12,8,5);
+        Assert(ridge.IsVisible(1,12,8) && ridge.IsVisible(0,4,8)==false,
+            "opposing factions maintain separate current sight");
+        Assert(ridge.Count(0,IntelState.Explored)>0,
+            "past visibility persists as explored memory");
+
         Console.WriteLine("All "+successes+" headless simulation assertions passed. These do not validate Unity editor or APK.");
     }
 }
