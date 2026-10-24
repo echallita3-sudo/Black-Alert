@@ -133,6 +133,7 @@ static class Program
         economy.Tick(17);
         Assert(economy.CollectCompleted().Count==0,
             "production slows under electrical deficit");
+        economy.AddCredits(900); // Test an earned/supplied reserve before adding generation.
         Assert(economy.BuildStructure("reactor") && !economy.LowPower,
             "new reactor restores power to factory");
         economy.Tick(13);
