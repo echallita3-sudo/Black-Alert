@@ -64,6 +64,12 @@ namespace BlackAlert
             return Mathf.Clamp((OnRoad(at)?1.2f:1f)-gradePenalty,.23f,1.25f);
         }
 
+        public void SetFogMask(Texture2D mask)
+        {
+            if(terrainMaterial!=null && terrainMaterial.HasProperty("_FogTex"))
+                terrainMaterial.SetTexture("_FogTex",mask);
+        }
+
         public void Build()
         {
             if(transform.Find("3D mountain terrain") != null)return;
