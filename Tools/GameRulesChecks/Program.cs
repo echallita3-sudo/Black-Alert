@@ -66,9 +66,9 @@ static class Program
         var chosen=cards.Hand[0];
         cards.Play(chosen.Id,10,10);
         Assert(cards.Energy==5-chosen.EnergyCost,"played card consumes energy");
+        Assert(cards.CooldownRemaining(chosen.Id)>0,"card begins cooldown immediately");
         cards.Tick(5);
         Assert(cards.Energy==6-chosen.EnergyCost,"card energy regenerates after five seconds");
-        Assert(cards.CooldownRemaining(chosen.Id)>0,"card cooldown still active");
         var hi=new FaceOffDeck(7,900);
         Assert(hi.CareerLevel==7 && FaceOffDeck.StandardCards().Length==12,
             "advanced duel career deck includes higher tiers");
