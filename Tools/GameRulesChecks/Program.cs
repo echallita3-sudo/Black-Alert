@@ -152,6 +152,31 @@ static class Program
         Assert(autoHarvester.Credits==110 && autoHarvester.TotalHarvested==110,
             "headless economy can simulate a virtual harvester delivery");
 
+        var mapPath=new GridPathfinder(8,8,(x,y)=>x!=3 || y==4);
+        var detour=mapPath.Find(new GridCell(0,0),new GridCell(7,0));
+        Assert(detour.Count>0 && detour.Exists(p=>p.X==3 && p.Y==4),
+            "A* traverses a mountain gap rather than crossing a blocked ridge");
+        var sealedWall=new GridPathfinder(6,6,(x,y)=>x!=2);
+        Assert(sealedWall.Find(new GridCell(0,0),new GridCell(5,0)).Count==0,
+            "A* reports impassable wall instead of creating a teleport path");
+        var diagonalTrap=new GridPathfinder(3,3,
+            (x,y)=>!(x==1 && y==0) && !(x==0 && y==1));
+        Assert(diagonalTrap.Find(new GridCell(0,0),new GridCell(2,2)).Count==0,
+            "A* cannot cut diagonally through blocked mountain corners");
+        var mudRoute=new GridPathfinder(5,3,(x,y)=>true,
+            (x,y)=>x==2 && y==1 ? 50 : 0);
+        var avoided=mudRoute.Find(new GridCell(0,1),new GridCell(4,1));
+        Assert(avoided.Count>0 && !avoided.Exists(p=>p.X==2 && p.Y==1),
+            "A* chooses a longer clean route rather than extremely deep mud");
+        var stationaryRoute=mudRoute.Find(new GridCell(2,1),new GridCell(2,1));
+        Assert(stationaryRoute.Count==1 && stationaryRoute[0].Equals(new GridCell(2,1)),
+            "A* already-at-destination route contains one position");
+        ExpectError(()=>new GridPathfinder(0,4,(x,y)=>true),
+            "reject zero-width pathfinding grids");
+        ExpectError(()=>new GridPathfinder(3,3,(x,y)=>true,(x,y)=>double.NaN)
+            .Find(new GridCell(0,0),new GridCell(2,2)),
+            "reject invalid terrain movement penalties");
+
         Console.WriteLine("All "+successes+" headless simulation assertions passed. These do not validate Unity editor or APK.");
     }
 }
