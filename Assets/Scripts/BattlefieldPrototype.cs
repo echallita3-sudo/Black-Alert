@@ -320,7 +320,7 @@ namespace BlackAlert
         private void SpawnInfantry(Vector3 p,bool hostile)
         {
             p.y=(physicalTerrain!=null?physicalTerrain.Height(p.x,p.z):0);
-            var model=BlackAlertAdditionalModels.Rifleman(p,hostile);
+            var model=BlackAlertDetailedInfantryArt.Create(p,hostile);
             agents.Add(new Agent {model=model,enemy=hostile,
                 goal=hostile?new Vector3(-21,0,p.z):p,speed=hostile?3.7f:4.2f,altitude=.1f,infantry=true});
         }
@@ -702,7 +702,10 @@ namespace BlackAlert
                     a.cooldown=a.infantry ? .8f : (a.naval ? 2.6f : 1.3f);
                     shotsFired++;
                     var visual=a.model.GetComponent<BlackAlertVehicleAnimator>();
-                    Vector3 muzzle=visual!=null?visual.MuzzlePosition:position+Vector3.up;
+                    var infantryVisual=a.model.GetComponent<BlackAlertInfantryAnimator>();
+                    Vector3 muzzle=visual!=null?visual.MuzzlePosition:
+                        infantryVisual!=null && infantryVisual.muzzle!=null?
+                        infantryVisual.muzzle.position:position+Vector3.up;
                     Vector3 impact=enemy.model.transform.position+Vector3.up*(enemy.infantry?1.1f:.55f);
                     if(visual!=null)visual.Fire();
                     BlackAlertSoundFx.Shot(muzzle);
