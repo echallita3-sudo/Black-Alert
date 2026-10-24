@@ -15,6 +15,7 @@ namespace BlackAlert
             public Vector3 goal;
             public float cooldown;
             public float speed;
+            public float altitude = .6f;
             public bool selected;
         }
 
@@ -70,6 +71,8 @@ namespace BlackAlert
                 Spawn(new Vector3(-22 + i * 2.5f, 0, -9 + i % 3 * 3f), false);
                 Spawn(new Vector3(18 + i * 2.5f, 0, 7 + i % 3 * 3f), true);
             }
+            SpawnHelicopter(new Vector3(-25f,7f,19f), false);
+            SpawnHelicopter(new Vector3(25f,7f,-19f), true);
         }
 
         private void BuildGround()
@@ -102,26 +105,22 @@ namespace BlackAlert
 
         private void BuildBases()
         {
-            Cube("Azure HQ", new Vector3(-33,3,-2), new Vector3(7,6,9), friendMat);
-            Cube("Crimson HQ", new Vector3(33,3,2), new Vector3(7,6,9), foeMat);
-            for (int i=0;i<3;i++)
-            {
-                Cube("Azure Factory",new Vector3(-33,2,12+i*9),new Vector3(6,4,6),friendMat);
-                Cube("Crimson Factory",new Vector3(33,2,-12-i*9),new Vector3(6,4,6),foeMat);
-            }
+            Cube("Azure Command HQ",new Vector3(-33,3,-2),new Vector3(8,6,10),friendMat);
+            Cube("Crimson Command HQ",new Vector3(33,3,2),new Vector3(8,6,10),foeMat);
+            BlackAlertModelFactory.CreateFactory(new Vector3(-35,0,22),false);
+            BlackAlertModelFactory.CreateFactory(new Vector3(35,0,-22),true);
         }
 
         private void Spawn(Vector3 p, bool hostile)
         {
-            var body = Cube(hostile ? "Crimson Tank" : "Azure Tank", p + Vector3.up*0.6f,
-                new Vector3(1.8f,1.2f,2.7f), hostile ? foeMat : friendMat);
-            var turret = Cube("Turret",p + Vector3.up * 1.35f,new Vector3(1.2f,0.5f,1.2f),
-                NewMaterial(new Color(0.25f,0.26f,0.29f)),body.transform);
-            turret.transform.localPosition = new Vector3(0,0.68f,0);
-            var barrel = Cube("Barrel",p + Vector3.up * 1.3f + Vector3.forward, new Vector3(0.25f,0.25f,2.2f),
-                turret.GetComponent<Renderer>().sharedMaterial,turret.transform);
-            barrel.transform.localPosition = new Vector3(0,0,1.1f);
-            agents.Add(new Agent {model=body,enemy=hostile,goal=p,speed=hostile?3.1f:3.8f});
+            var model = BlackAlertModelFactory.CreateTank(p+Vector3.up*.6f,hostile);
+            agents.Add(new Agent {model=model,enemy=hostile,goal=p,speed=hostile?3.1f:3.8f,altitude=.6f});
+        }
+
+        private void SpawnHelicopter(Vector3 p, bool hostile)
+        {
+            var model = BlackAlertModelFactory.CreateHelicopter(p,hostile);
+            agents.Add(new Agent {model=model,enemy=hostile,goal=p,speed=hostile?5f:5.5f,altitude=7f});
         }
 
         private void Update()
@@ -203,14 +202,25 @@ namespace BlackAlert
                 }
                 if(a.enemy && enemy!=null && best<190f) a.goal=enemy.model.transform.position;
                 var position=a.model.transform.position;
-                var flatGoal=new Vector3(a.goal.x,0.6f,a.goal.z);
+                var flatGoal=new Vector3(a.goal.x,a.altitude,a.goal.z);
                 var diff=flatGoal-position;
                 if(diff.sqrMagnitude>4.5f && (enemy==null || best>70f || !a.enemy))
                 {
-                    float inRiver=Mathf.Abs(position.x)<3.5f?0.5f:1f;
+                    float inRiver=a.altitude>2f?1f:(Mathf.Abs(position.x)<3.5f?0.5f:1f);
                     position=Vector3.MoveTowards(position,flatGoal,Time.deltaTime*a.speed*inRiver);
                     a.model.transform.position=position;
                     if(diff.sqrMagnitude>0.1f) a.model.transform.rotation=Quaternion.Slerp(a.model.transform.rotation,Quaternion.LookRotation(diff),Time.deltaTime*4f);
+                }
+                if(enemy!=null)
+                {
+                    var motion=a.model.GetComponent<BlackAlertVisualMotion>();
+                    if(motion != null && motion.turret != null)
+                    {
+                        Vector3 toward=enemy.model.transform.position-a.model.transform.position;
+                        toward.y=0;
+                        if(toward.sqrMagnitude>.01f)
+                            motion.turret.rotation=Quaternion.Slerp(motion.turret.rotation,Quaternion.LookRotation(toward),Time.deltaTime*5f);
+                    }
                 }
                 a.cooldown-=Time.deltaTime;
                 if(enemy!=null && best < 120f && a.cooldown<=0)
@@ -225,12 +235,32 @@ namespace BlackAlert
 
         private void SpawnTracer(Vector3 start,Vector3 end)
         {
+            StartCoroutine(TravelShell(start,end));
+        }
+        private System.Collections.IEnumerator TravelShell(Vector3 start,Vector3 end)
+        {
             var projectile=GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            projectile.name="Impact flash";
-            projectile.transform.position=end;
-            projectile.transform.localScale=Vector3.one*1.2f;
-            projectile.GetComponent<Renderer>().sharedMaterial=NewMaterial(new Color(1f,0.48f,0.05f));
-            Object.Destroy(projectile,0.22f);
+            projectile.name="Animated combat shell";
+            projectile.transform.localScale=Vector3.one*.37f;
+            projectile.GetComponent<Renderer>().sharedMaterial=NewMaterial(new Color(1f,.68f,.16f));
+            Object.Destroy(projectile.GetComponent<Collider>());
+            float t=0;
+            while(t<1f)
+            {
+                t+=Time.deltaTime*4f;
+                var arc=Vector3.up*(Mathf.Sin(Mathf.Clamp01(t)*Mathf.PI)*3.4f);
+                projectile.transform.position=Vector3.Lerp(start,end,Mathf.Clamp01(t))+arc;
+                yield return null;
+            }
+            projectile.name="Impact flare";
+            float radius=0;
+            while(radius<1.7f)
+            {
+                radius+=Time.deltaTime*6f;
+                projectile.transform.localScale=Vector3.one*radius;
+                yield return null;
+            }
+            Object.Destroy(projectile);
         }
 
         private void OnGUI()
