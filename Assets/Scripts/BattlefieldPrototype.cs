@@ -44,6 +44,7 @@ namespace BlackAlert
         private float battleTime;
         private int shotsFired;
         private RtsEconomy economy;
+        private BlackAlertOreHarvester harvester;
         private float nuclearReadyAt;
         private bool targetingNuclear;
 
@@ -107,9 +108,14 @@ namespace BlackAlert
 
         private void StartEconomy()
         {
+            if(harvester!=null)
+                Destroy(harvester.gameObject);
             economy=new RtsEconomy(5500);
             economy.AddOreNode("Azure Ore Field",5000);
-            economy.AssignHarvester("Azure Ore Field");
+            var oreVehicle=new GameObject("Azure Ore Harvester");
+            harvester=oreVehicle.AddComponent<BlackAlertOreHarvester>();
+            harvester.Configure(economy,physicalTerrain,"Azure Ore Field",
+                new Vector3(-31,0,-24),new Vector3(-19,0,-31));
         }
 
         private void DeliverProduction(string id)
