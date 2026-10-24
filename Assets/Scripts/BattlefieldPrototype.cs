@@ -312,7 +312,7 @@ namespace BlackAlert
         private void Spawn(Vector3 p,bool hostile)
         {
             p.y=.6f+(physicalTerrain!=null?physicalTerrain.Height(p.x,p.z):0);
-            var model=BlackAlertModelFactory.CreateTank(p,hostile);
+            var model=BlackAlertDetailedVehicleArt.Tank(p,hostile);
             agents.Add(new Agent {model=model,enemy=hostile,
                 goal=hostile?new Vector3(-22,0,p.z):p,speed=hostile?3.1f:3.8f,altitude=.6f});
         }
@@ -325,20 +325,20 @@ namespace BlackAlert
         }
         private void SpawnHelicopter(Vector3 p,bool hostile)
         {
-            var model=BlackAlertModelFactory.CreateHelicopter(p,hostile);
+            var model=BlackAlertDetailedVehicleArt.Helicopter(p,hostile);
             agents.Add(new Agent {model=model,enemy=hostile,
                 goal=hostile?new Vector3(-20,0,p.z):p,speed=hostile?5f:5.5f,altitude=7f});
         }
         private void SpawnJet(Vector3 p,bool hostile)
         {
-            var model=BlackAlertAdditionalModels.Jet(p,hostile);
+            var model=BlackAlertDetailedVehicleArt.Jet(p,hostile);
             agents.Add(new Agent {model=model,enemy=hostile,
                 goal=hostile?new Vector3(-22,0,p.z):p,speed=hostile?10f:11f,altitude=13f});
         }
         private void SpawnShip(Vector3 p,bool hostile)
         {
             p.x=physicalTerrain!=null?physicalTerrain.RiverCenter(p.z):0;
-            var model=BlackAlertAdditionalModels.Destroyer(p,hostile);
+            var model=BlackAlertDetailedVehicleArt.Destroyer(p,hostile);
             agents.Add(new Agent {model=model,enemy=hostile,
                 goal=new Vector3(p.x,0,hostile?-18:18),speed=hostile?2.7f:2.3f,
                 altitude=.7f,naval=true});
@@ -679,15 +679,19 @@ namespace BlackAlert
                 }
                 else if(a.naval)
                     a.momentum=Mathf.MoveTowards(a.momentum,0,Time.deltaTime*.32f);
-                if(enemy!=null)
+                if(enemy!=null && enemy.model!=null)
                 {
-                    var motion=a.model.GetComponent<BlackAlertVisualMotion>();
-                    if(motion != null && motion.turret != null)
+                    Vector3 toward=enemy.model.transform.position-a.model.transform.position;
+                    toward.y=0;
+                    if(toward.sqrMagnitude>.01f)
                     {
-                        Vector3 toward=enemy.model.transform.position-a.model.transform.position;
-                        toward.y=0;
-                        if(toward.sqrMagnitude>.01f)
-                            motion.turret.rotation=Quaternion.Slerp(motion.turret.rotation,Quaternion.LookRotation(toward),Time.deltaTime*5f);
+                        var detailed=a.model.GetComponent<BlackAlertVehicleAnimator>();
+                        var pivot=detailed!=null?detailed.turret:null;
+                        var legacy=a.model.GetComponent<BlackAlertVisualMotion>();
+                        if(pivot==null && legacy!=null)pivot=legacy.turret;
+                        if(pivot!=null)
+                            pivot.rotation=Quaternion.Slerp(pivot.rotation,
+                                Quaternion.LookRotation(toward),Time.deltaTime*5f);
                     }
                 }
                 a.cooldown-=Time.deltaTime;
@@ -696,10 +700,14 @@ namespace BlackAlert
                 {
                     a.cooldown=a.infantry ? .8f : (a.naval ? 2.6f : 1.3f);
                     shotsFired++;
-                    BlackAlertSoundFx.Shot(position);
+                    var visual=a.model.GetComponent<BlackAlertVehicleAnimator>();
+                    Vector3 muzzle=visual!=null?visual.MuzzlePosition:position+Vector3.up;
+                    Vector3 impact=enemy.model.transform.position+Vector3.up*(enemy.infantry?1.1f:.55f);
+                    if(visual!=null)visual.Fire();
+                    BlackAlertSoundFx.Shot(muzzle);
                     enemy.hp-=a.infantry?6f:a.naval?34f:18f;
                     if(enemy.hp<=0) {Object.Destroy(enemy.model);enemy.model=null;}
-                    SpawnTracer(position+Vector3.up,enemy.model!=null?enemy.model.transform.position+Vector3.up:position+Vector3.forward*3);
+                    SpawnTracer(muzzle,impact);
                 }
             }
         }
