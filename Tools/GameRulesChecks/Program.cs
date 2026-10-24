@@ -279,6 +279,20 @@ static class Program
         ExpectError(()=>stronghold.Damage(0,-5),
             "negative base damage cannot heal a base");
 
+        var siegeSituation=new AiCommanderSituation(BattleMode.Skirmish,
+            30,0,-30,0,2000,2,0,false,ours,new AiUnitIntel[0],
+            objectives,85);
+        var siegePlan=brain.Decide(siegeSituation);
+        Assert(siegePlan.Orders.Any(o=>o.Action==AiOrderType.Advance &&
+            Math.Abs(o.TargetX+30)<.01f),
+            "after reconnaissance an AI army advances toward the known enemy headquarters");
+        var initialScout=new AiCommanderSituation(BattleMode.Skirmish,
+            30,0,-30,0,2000,2,0,false,ours,new AiUnitIntel[0],
+            objectives,15);
+        Assert(brain.Decide(initialScout).Orders.Any(o=>o.Action==AiOrderType.Advance &&
+            Math.Abs(o.TargetX)<.01f),
+            "early AI reconnaissance scouts center instead of rushing the enemy base");
+
         Console.WriteLine("All "+successes+" headless simulation assertions passed. These do not validate Unity editor or APK.");
     }
 }
