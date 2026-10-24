@@ -109,6 +109,8 @@ namespace BlackAlert
             if(shader == null) shader=Shader.Find("Standard");
             terrainMaterial=new Material(shader);
             terrainMaterial.color=Color.white;
+            terrainMaterial.mainTexture=BlackAlertProceduralTextures.GroundNoise();
+            terrainMaterial.mainTextureScale=new Vector2(8f,8f);
             go.AddComponent<MeshRenderer>().sharedMaterial=terrainMaterial;
             go.AddComponent<MeshCollider>().sharedMesh=mesh;
             BuildDecor();
