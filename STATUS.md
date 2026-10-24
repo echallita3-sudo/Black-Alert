@@ -48,3 +48,21 @@ A major source-only batch is now on `main`:
 **No new Unity Cloud/Android build has been started.** These C# changes have **not been compiled or run in Unity** and the Android-tested APK remains Build #1 (basic geometric smoke test). Static test success is not Unity compilation. User's 200 monthly free Unity build-minute quota has not been spent by this batch.
 
 **Incomplete vision:** the original approved high-fidelity textured/rigged meshes, professional sound, touch-optimized graphical HUD, Android gallery picker, working online 2–8 player synchronization and servers, full World War III world geography/campaign, 8-player map variants and polished multiplayer game modes remain unfinished. The new Unity mode UI and effects are prototypes only. Protect free minutes; build at a meaningful milestone after source/asset integration and test readiness.
+
+## 2026-10-24 — Phase 5 original geometry upgrade
+
+### Live 3D art (source committed, not Android tested)
+New C# assets on `main`:
+- `BlackAlertMeshGeometry.cs`: original Unity triangulated custom angular armor bodies, tapered fuselages, convex wing/deck plates, and continuous curved crawler tracks; computed normals and shared meshes.
+- `BlackAlertDetailedVehicleArt.cs`: rebuilt battle tanks with layered beveled hull, continuous track loops, separate road wheels, artillery turret yaw/cannon recoil; helicopters with tapered canopy, launcher pods, spinning main and tail rotors; modern swept-wing jets with stabilizers, twin engines and missiles; guided-missile destroyers with tapering hull/deck, superstructure, launcher cells, rotating radar and independent naval cannon. Runtime `BlackAlertVehicleAnimator` now animates mechanical pieces.
+- `BlackAlertDetailedInfantryArt.cs`: soldier model with separate head, visor, helmet, body armor, backpack, rifle, articulated shoulders/elbows and hips/knees/boots, walk-cycle motion.
+- `BlackAlertCombatEffects.cs`: reusable pooled world-space muzzle sparks, impact embers, smoky dust and nuclear blast debris.
+- `Assets/Shaders/AnimatedRiverWater.shader`: per-pixel animated moving ripples; battlefield now creates the material dynamically.
+- `BattlefieldPrototype.cs` **uses the new actual model constructors at spawn**, aims the new tank/warship turrets, fires from muzzle transforms, and invokes VFX. It now enables soft sun shadows, distance fog, and ambient illumination. Legacy block-model source remains for backwards compatibility but is not the spawned art.
+- `Tools/UnitySyntaxChecks/` and `.github/workflows/unity-syntax.yml`: Roslyn checks of all Unity C# syntax in editor and Android configurations at zero Unity Cloud usage. Workflow ran successfully: https://github.com/echallita3-sudo/Black-Alert/actions/runs/40089999562
+
+The **53 headless gameplay rules tests** from prior milestone also remain passing. Source checks and Android readiness succeed. **There has been no new Unity Cloud build or Android APK** during this batch.
+
+### Important limits
+These are procedurally generated custom 3D meshes, not images, but they are still **early production blockout art**. They are **not yet** visually equivalent to approved AAA concept paintings (no scanned photoreal textures, sculpted high-detail production characters, animation motion capture, final sound mixing, cinematic weather/VFX, complete graphics optimization, or skeletal runtime skinning). The new assets and shader have not been checked in the Unity editor and may reveal Unity compilation/render/physics bugs. Continue GitHub development and free checks; spend the limited Unity minutes only once there is enough asset/game integration for meaningful tests.
+
