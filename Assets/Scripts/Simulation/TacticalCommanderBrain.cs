@@ -51,6 +51,7 @@ namespace BlackAlert.Simulation
         public float HomeZ { get; }
         public float EnemyBaseX { get; }
         public float EnemyBaseZ { get; }
+        public double ElapsedSeconds { get; }
         public int Credits { get; }
         public int Technology { get; }
         public int QueueCount { get; }
@@ -62,13 +63,16 @@ namespace BlackAlert.Simulation
         public AiCommanderSituation(BattleMode mode,float homeX,float homeZ,
             float enemyBaseX,float enemyBaseZ,int credits,int technology,
             int queueCount,bool lowPower,IEnumerable<AiUnitIntel> friendly,
-            IEnumerable<AiUnitIntel> visibleContacts,IEnumerable<AiObjective> objectives)
+            IEnumerable<AiUnitIntel> visibleContacts,IEnumerable<AiObjective> objectives,
+            double elapsedSeconds=0)
         {
-            if(credits<0 || technology<1 || queueCount<0)
+            if(credits<0 || technology<1 || queueCount<0 ||
+                double.IsNaN(elapsedSeconds) || elapsedSeconds<0)
                 throw new ArgumentException("Invalid economy snapshot.");
             Mode=mode;HomeX=homeX;HomeZ=homeZ;
             EnemyBaseX=enemyBaseX;EnemyBaseZ=enemyBaseZ;
             Credits=credits;Technology=technology;QueueCount=queueCount;LowPower=lowPower;
+            ElapsedSeconds=elapsedSeconds;
             Friendly=(friendly??throw new ArgumentNullException(nameof(friendly))).ToArray();
             Contacts=(visibleContacts??throw new ArgumentNullException(nameof(visibleContacts))).ToArray();
             Objectives=(objectives??throw new ArgumentNullException(nameof(objectives))).ToArray();
@@ -263,11 +267,16 @@ namespace BlackAlert.Simulation
                         situation.HomeX-7f,situation.HomeZ+(unit.Id%4-2)*2f));
                     continue;
                 }
-                // Recon routes are deterministically fanned across the central battlefield.
-                float side=(unit.Id%5-2)*5f;
+                // After reconnaissance, sizeable armies advance on the known enemy HQ.
+                // They cannot locate hidden individual units without a visible contact.
+                float side=(unit.Id%5-2)*3.0f;
+                bool siege=situation.ElapsedSeconds>=65 &&
+                    situation.Friendly.Count>=8 && situation.Mode!=BattleMode.WorldWarIII;
                 orders.Add(new AiUnitOrder(unit.Id,AiOrderType.Advance,
-                    (situation.HomeX+situation.EnemyBaseX)*.5f,
-                    (situation.HomeZ+situation.EnemyBaseZ)*.5f+side));
+                    siege?situation.EnemyBaseX:
+                        (situation.HomeX+situation.EnemyBaseX)*.5f,
+                    (siege?situation.EnemyBaseZ:
+                        (situation.HomeZ+situation.EnemyBaseZ)*.5f)+side));
             }
             return new AiCommanderPlan(strategic,production,structure,orders);
         }
