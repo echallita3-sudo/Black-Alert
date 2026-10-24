@@ -121,7 +121,8 @@ namespace BlackAlert
             friendMat = NewMaterial(new Color(0.12f, 0.6f, 0.95f));
             foeMat = NewMaterial(new Color(0.86f, 0.19f, 0.16f));
             earthMat = NewMaterial(new Color(0.20f, 0.31f, 0.25f));
-            var riverShader=Shader.Find("BlackAlert/RiverWater");
+            var riverShader=Resources.Load<Shader>("Shaders/WaterBundled");
+            if(riverShader==null)riverShader=Shader.Find("BlackAlert/RiverWater");
             waterMat=riverShader!=null
                 ? new Material(riverShader)
                 : NewMaterial(new Color(.08f,.35f,.6f));
