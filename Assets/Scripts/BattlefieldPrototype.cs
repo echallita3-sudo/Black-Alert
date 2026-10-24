@@ -143,6 +143,7 @@ namespace BlackAlert
         public void RestartBattle()
         {
             StopAllCoroutines();
+            BlackAlertCombatEffects.Clear();
             foreach(var unit in agents)if(unit.model!=null)Destroy(unit.model);
             agents.Clear();
             selected=null;
@@ -705,6 +706,7 @@ namespace BlackAlert
                     Vector3 impact=enemy.model.transform.position+Vector3.up*(enemy.infantry?1.1f:.55f);
                     if(visual!=null)visual.Fire();
                     BlackAlertSoundFx.Shot(muzzle);
+                    BlackAlertCombatEffects.MuzzleFlash(muzzle);
                     enemy.hp-=a.infantry?6f:a.naval?34f:18f;
                     if(enemy.hp<=0) {Object.Destroy(enemy.model);enemy.model=null;}
                     SpawnTracer(muzzle,impact);
@@ -731,6 +733,7 @@ namespace BlackAlert
                 projectile.transform.position=Vector3.Lerp(start,end,Mathf.Clamp01(t))+arc;
                 yield return null;
             }
+            BlackAlertCombatEffects.Hit(end);
             projectile.name="Impact flare";
             float radius=0;
             while(radius<1.7f)
@@ -765,6 +768,7 @@ namespace BlackAlert
             }
             Destroy(payload);
             BlackAlertSoundFx.Explosion(target);
+            BlackAlertCombatEffects.NuclearDetonation(target);
             foreach(var unit in agents)
             {
                 if(unit.model==null || unit.hp<=0)continue;
