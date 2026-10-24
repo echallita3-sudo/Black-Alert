@@ -72,3 +72,16 @@ These are procedurally generated custom 3D meshes, not images, but they are stil
 Custom runtime camouflage in `BlackAlertProceduralTextures.cs` now generates reusable 256x256 armored-vehicle paint patterns and terrain pebble/roughness maps. `BlackAlertMeshGeometry.cs` sets actual UV coordinates for those patterns; `BlackAlertDetailedVehicleArt.cs` assigns faction camouflage materials to mesh parts, and `BlackAlertTerrain.cs` applies repeated ground detail. Animated water and fog are also wired into live scene startup.
 
 **Build 1 remains the only Android-tested APK.** No new Unity Cloud build has been triggered. These changes are saved as source and need actual Unity rendering/performance validation before claims about image quality are possible.
+
+## 2026-10-24 — Phase 6 tactical intelligence / fog of war
+
+- `Assets/Scripts/Simulation/FogOfWarGrid.cs`: per-team grid knowledge with **unknown / previously explored / currently visible** states, finite circular scout radius, and line-of-sight concealment behind terrain blockers. Opposing teams cannot read each other's fog snapshot.
+- `Assets/Scripts/BlackAlertTacticalIntel.cs`: Unity-side update on a budgeted 0.36-second interval; visible player units reveal terrain, hidden enemy units are deactivated for rendering/selection, and a clickable minimap shows ground/water/terrain and only the enemy units currently scouted. A Fog toggle exists for source/testing.
+- `BattlefieldPrototype.cs`: creates the intelligence manager, registers unit positions and ranges, enforces faction-based target detection (no universal enemy omniscience), and allows camera repositioning from the minimap.
+- `Assets/Shaders/VertexColorTerrain.shader` and bundled `Assets/Resources/Shaders/TerrainFogBundled.shader`: the actual 3D terrain surface dims unknown tiles and partially lights remembered tiles. Animated water shader bundled in Resources as well to reduce Android runtime stripping risk.
+- The headless game-rule tests now total **65 passing assertions** including fog memory, faction isolation, finite sight radius, and occluded targets: https://github.com/echallita3-sudo/Black-Alert/actions/runs/40095203356.
+- Latest C# Roslyn syntax, Android-readiness and source checks also passed on `main` prior to this documentation update: https://github.com/echallita3-sudo/Black-Alert/actions/runs/40095572139.
+
+**Reality check:** these are committed code and free non-Unity tests. The fog shader, material inclusion, minimap touch controls, enemy visibility, and real frame rate have **not been verified in Unity or on Android**. Build #1 is still the sole tested Android APK; no new Unity Cloud minutes were spent. Fog computation here is client-side and **must move to trusted server authority** before real multiplayer; this version should not be described as secure anti-cheat networking.
+
+Still outstanding: production 3D art/textures/animation and optimized UI, proper line-of-sight for individual altitude/units, real LAN/internet multiplayer with up to 8 players, full country dataset and complete World War III map, and tested Android bundles/asset packs.
