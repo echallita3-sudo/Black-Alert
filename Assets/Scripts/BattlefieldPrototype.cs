@@ -180,7 +180,18 @@ namespace BlackAlert
                 if(a.model != null && hit.collider != null && hit.collider.gameObject.transform.IsChildOf(a.model.transform))
                     {clicked=a;break;}
             }
-            if(clicked!=null && !clicked.enemy) {selected=clicked;return;}
+            if(clicked!=null && !clicked.enemy)
+            {
+                if(selected!=null && selected.model!=null)
+                {
+                    var oldRing=selected.model.transform.Find("Selection Ring");
+                    if(oldRing!=null) oldRing.gameObject.SetActive(false);
+                }
+                selected=clicked;
+                var newRing=clicked.model.transform.Find("Selection Ring");
+                if(newRing!=null) newRing.gameObject.SetActive(true);
+                return;
+            }
             if(selected!=null && selected.model!=null)
             {
                 selected.goal=new Vector3(Mathf.Clamp(hit.point.x,-47,47),0,Mathf.Clamp(hit.point.z,-43,43));
@@ -265,7 +276,7 @@ namespace BlackAlert
 
         private void OnGUI()
         {
-            if (GUI.Button(new Rect(15, 20, 170, 55),"BLACK ALERT")) { }
+            GUI.Label(new Rect(20, 20, 260, 55), "BLACK ALERT / 3D SYSTEM TEST");
             GUI.Label(new Rect(20, 82, 420, 30), "SKIRMISH TECH TEST — NOT FINAL ART");
             GUI.Label(new Rect(20, 105, 450, 30), "Select a blue tank, then tap ground to move");
             GUI.Label(new Rect(20, 128, 450, 30), "Elapsed: "+battleTime.ToString("0")+"s / Units: "+agents.Count);
