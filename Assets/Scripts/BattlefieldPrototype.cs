@@ -514,6 +514,12 @@ namespace BlackAlert
 
         private void Update()
         {
+            if(modeController!=null && modeController.MatchFinished)
+            {
+                // Preserve the result screen without generating additional units.
+                UpdateInput();
+                return;
+            }
             battleTime += Time.deltaTime;
             if(economy!=null)
             {
@@ -989,24 +995,24 @@ namespace BlackAlert
             Destroy(payload);
             BlackAlertSoundFx.Explosion(target);
             BlackAlertCombatEffects.NuclearDetonation(target);
+            if(azureHeadquarters!=null && Vector3.Distance(target,
+                azureHeadquarters.transform.position)<20f)
+                DamageHeadquarters(0,250,azureHeadquarters.transform.position);
+            if(crimsonHeadquarters!=null && Vector3.Distance(target,
+                crimsonHeadquarters.transform.position)<20f)
+                DamageHeadquarters(1,250,crimsonHeadquarters.transform.position);
             foreach(var unit in agents)
             {
                 if(unit.model==null || unit.hp<=0)continue;
                 float distance=Vector3.Distance(target,unit.model.transform.position);
                 if(distance<20f)
                 {
-                    unit.hp-=320f*(1f-distance/22f);
-                    if(unit.hp<=0)
-                    {
-                        Destroy(unit.model); unit.model=null;
-                    }
-                    else
-                    {
-                        var direction=(unit.model.transform.position-target);
-                        direction.y=0;
-                        if(direction.sqrMagnitude>.01f)
-                            unit.model.transform.position+=direction.normalized*(20f-distance)*.22f;
-                    }
+                    var direction=unit.model.transform.position-target;
+                    direction.y=0;
+                    ApplyDamage(unit,320f*(1f-distance/22f));
+                    if(unit.model!=null && direction.sqrMagnitude>.01f)
+                        unit.model.transform.position+=direction.normalized*
+                            (20f-distance)*.22f;
                 }
             }
             var flash=GameObject.CreatePrimitive(PrimitiveType.Sphere);
