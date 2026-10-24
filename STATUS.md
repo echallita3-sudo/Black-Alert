@@ -66,3 +66,9 @@ The **53 headless gameplay rules tests** from prior milestone also remain passin
 ### Important limits
 These are procedurally generated custom 3D meshes, not images, but they are still **early production blockout art**. They are **not yet** visually equivalent to approved AAA concept paintings (no scanned photoreal textures, sculpted high-detail production characters, animation motion capture, final sound mixing, cinematic weather/VFX, complete graphics optimization, or skeletal runtime skinning). The new assets and shader have not been checked in the Unity editor and may reveal Unity compilation/render/physics bugs. Continue GitHub development and free checks; spend the limited Unity minutes only once there is enough asset/game integration for meaningful tests.
 
+
+### Material/detail update
+
+Custom runtime camouflage in `BlackAlertProceduralTextures.cs` now generates reusable 256x256 armored-vehicle paint patterns and terrain pebble/roughness maps. `BlackAlertMeshGeometry.cs` sets actual UV coordinates for those patterns; `BlackAlertDetailedVehicleArt.cs` assigns faction camouflage materials to mesh parts, and `BlackAlertTerrain.cs` applies repeated ground detail. Animated water and fog are also wired into live scene startup.
+
+**Build 1 remains the only Android-tested APK.** No new Unity Cloud build has been triggered. These changes are saved as source and need actual Unity rendering/performance validation before claims about image quality are possible.
