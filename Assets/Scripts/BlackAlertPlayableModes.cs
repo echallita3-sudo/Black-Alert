@@ -52,8 +52,8 @@ namespace BlackAlert
         public bool BlocksWorldTouch(Vector2 screenPoint)
         {
             float guiY = Screen.height - screenPoint.y;
-            return (screenPoint.x <= 230f && guiY <= 585f) ||
-                   (screenPoint.x >= Screen.width - 318f && guiY <= (panelOpen ? 690f : 228f));
+            return (screenPoint.x <= 230f && guiY <= 720f) ||
+                   (screenPoint.x >= Screen.width - 318f && guiY <= (panelOpen ? 830f : 228f));
         }
 
         private void BeginMode(BattleMode next, bool resetArmies)
