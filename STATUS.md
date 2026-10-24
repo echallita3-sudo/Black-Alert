@@ -21,3 +21,15 @@
 5. Only then improve production art, deep physics, and network simulation.
 
 **Never claim source checks mean the game runs, or show concept mockups as in-game assets.** We will keep approved quality target and all modes in BLACK_ALERT_REQUIREMENTS.md.
+
+
+## 2026-10-24 — game-first, free-minutes-preserving development
+
+The user asked to build substantial systems in source before paying Unity cloud build costs. A headless game mode layer has been committed under `Assets/Scripts/Simulation/`:
+- `MatchState.cs`: room/team validation, 2–8 player Skirmish elimination, Survival ring stage and last commander/team rules, Battlefield capture sectors and ticket drain.
+- `FaceOffDeck.cs`: asymmetric career-card role, 12 distinct tactical effects, seeded card draws, energy and cooldowns.
+- `WorldWarCampaign.cs`: country graph validation, ownership, capital-connected supply lines, alliances, economy, reinforcement and simplified turn-based invasion resolution. **The full verified all-country dataset, diplomacy UI and Unity tactical integration do not yet exist.**
+
+These rule files are compiled outside Unity by `Tools/GameRulesChecks/GameRulesChecks.csproj` and the workflow `.github/workflows/game-rules.yml`. **26 assertions passed on GitHub Actions**: https://github.com/echallita3-sudo/Black-Alert/actions/runs/40052994085
+
+Crucial distinction: these tests compile only the pure C# simulation layer and **cannot validate the Unity project's components**, model rigging, live graphics, Android export or networking. The last Unity Cloud APK tested is still Build #1 (early geometric visual test). Avoid spending user's free build minutes until substantial integrations and assets are ready.
