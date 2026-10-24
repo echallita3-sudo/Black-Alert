@@ -33,3 +33,18 @@ The user asked to build substantial systems in source before paying Unity cloud 
 These rule files are compiled outside Unity by `Tools/GameRulesChecks/GameRulesChecks.csproj` and the workflow `.github/workflows/game-rules.yml`. **26 assertions passed on GitHub Actions**: https://github.com/echallita3-sudo/Black-Alert/actions/runs/40052994085
 
 Crucial distinction: these tests compile only the pure C# simulation layer and **cannot validate the Unity project's components**, model rigging, live graphics, Android export or networking. The last Unity Cloud APK tested is still Build #1 (early geometric visual test). Avoid spending user's free build minutes until substantial integrations and assets are ready.
+
+## 2026-10-24 — match modes wired to Unity
+
+A major source-only batch is now on `main`:
+
+- **Unity modes:** `BlackAlertPlayableModes.cs` connects offline Skirmish, Battlefield control sectors and score tickets, a shrinking Survival ring, a card-powered Face-Off demonstration, and a clearly labeled *six-country demo* of World War III strategic turns.
+- **Economy:** `RtsEconomy.cs` provides finite ore, cargo loading/deposit, generated/used power, tech upgrades, and time-based production queues. `BlackAlertOreHarvester.cs` models a physical truck shuttling mined cargo between ore nodes and the refinery; economy credits increase on delivery, not a free counter.
+- **Controls:** unit type double-tap, touch long-press drag squad selection, desktop box selection, formation offsets, pinch zoom/pan, selection rings; touch-command suppression over HUD.
+- **Navigation:** `GridPathfinder.cs` deterministic A* cost and slope-aware routing, integrated into selected squads' and ground AI's move orders in the Unity battlefield.
+- **Profile:** persistent local commander name, XP, wins, losses and level, optional private PNG/JPEG in app data. In-app Android gallery picker, secure online uploads and social profiles are **not** implemented.
+- **Testing:** 53 assertions passed in a free .NET GitHub Actions job (https://github.com/echallita3-sudo/Black-Alert/actions/runs/40079364677) spanning mode results, career cards, 6-country campaign rules, economy, and A* navigation. Last Unity source structural checks pass.
+
+**No new Unity Cloud/Android build has been started.** These C# changes have **not been compiled or run in Unity** and the Android-tested APK remains Build #1 (basic geometric smoke test). Static test success is not Unity compilation. User's 200 monthly free Unity build-minute quota has not been spent by this batch.
+
+**Incomplete vision:** the original approved high-fidelity textured/rigged meshes, professional sound, touch-optimized graphical HUD, Android gallery picker, working online 2–8 player synchronization and servers, full World War III world geography/campaign, 8-player map variants and polished multiplayer game modes remain unfinished. The new Unity mode UI and effects are prototypes only. Protect free minutes; build at a meaningful milestone after source/asset integration and test readiness.
