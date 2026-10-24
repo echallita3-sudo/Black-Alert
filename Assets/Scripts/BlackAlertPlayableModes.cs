@@ -32,6 +32,7 @@ namespace BlackAlert
         private bool worldPanel;
         private bool endRecorded;
         private BlackAlertCommanderProfile profile;
+        private string profileDraft="";
         private BattleMode mode = BattleMode.Skirmish;
         private int selectedCard = -1;
         private GUIStyle labelStyle;
@@ -44,6 +45,7 @@ namespace BlackAlert
         {
             battle = host;
             profile = BlackAlertCommanderProfile.Load();
+            profileDraft=profile.DisplayName;
             BeginMode(BattleMode.Skirmish, false);
         }
 
@@ -233,8 +235,10 @@ namespace BlackAlert
             float x=Mathf.Max(300,Screen.width-318);
             GUI.Box(new Rect(x,12,310,212),"BLACK ALERT / COMMAND");
             GUI.Label(new Rect(x+12,37,285,26), "MODE: "+mode,headerStyle);
-            GUI.Label(new Rect(x+12,66,284,30), "COMMANDER: "+profile.DisplayName+
+            GUI.Label(new Rect(x+12,66,242,30), "COMMANDER: "+profile.DisplayName+
                 "  LV "+profile.Level,labelStyle);
+            if(profile.Avatar!=null)
+                GUI.DrawTexture(new Rect(x+257,61,42,42),profile.Avatar,ScaleMode.ScaleToFit);
             if(match!=null && mode==BattleMode.Battlefield)
                 GUI.Label(new Rect(x+12,94,284,30),
                     "TICKETS Azure "+match.GetTickets(0)+" / Crimson "+match.GetTickets(1),labelStyle);
@@ -249,7 +253,7 @@ namespace BlackAlert
                 panelOpen=!panelOpen;
 
             if(!panelOpen)return;
-            GUI.Box(new Rect(x,230,310,mode==BattleMode.WorldWarIII?540:492),"MODES / LIVE RULES TEST");
+            GUI.Box(new Rect(x,230,310,585),"MODES / LIVE RULES TEST");
             string[] titles={"SKIRMISH","BATTLEFIELD","SURVIVAL","FACE-OFF 1V1","WORLD WAR III (DEMO)"};
             BattleMode[] gameModes={BattleMode.Skirmish,BattleMode.Battlefield,BattleMode.Survival,
                 BattleMode.FaceOffDuel,BattleMode.WorldWarIII};
@@ -294,6 +298,10 @@ namespace BlackAlert
                     notification=attack.TerritoryCaptured?"Belgium captured":"Attack not successful";
                 }
             }
+            GUI.Label(new Rect(x+12,729,285,27),"COMMANDER PROFILE NAME",labelStyle);
+            profileDraft=GUI.TextField(new Rect(x+12,762,200,40),profileDraft,26);
+            if(GUI.Button(new Rect(x+219,762,79,40),"SAVE"))
+                profile.SetName(profileDraft);
             if(match!=null && match.Outcome!=BattleOutcome.InProgress)
                 GUI.Label(new Rect(x+12,708,300,40),"MATCH ENDED: "+match.Outcome,headerStyle);
         }
