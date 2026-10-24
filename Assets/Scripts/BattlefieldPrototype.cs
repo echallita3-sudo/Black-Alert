@@ -40,6 +40,7 @@ namespace BlackAlert
         private int shotsFired;
         private float credits=5500;
         private float nuclearReadyAt;
+        private bool targetingNuclear;
 
         private Material NewMaterial(Color color)
         {
@@ -220,6 +221,17 @@ namespace BlackAlert
         private void SelectOrOrder(Vector2 point)
         {
             if (!Physics.Raycast(cam.ScreenPointToRay(point),out RaycastHit hit,500f)) return;
+            if(targetingNuclear)
+            {
+                targetingNuclear=false;
+                if(credits>=3800f && Time.time>=nuclearReadyAt)
+                {
+                    credits-=3800f;
+                    nuclearReadyAt=Time.time+80f;
+                    StartCoroutine(NuclearStrikeAt(hit.point));
+                }
+                return;
+            }
             Agent clicked=null;
             foreach(var a in agents)
             {
@@ -351,6 +363,81 @@ namespace BlackAlert
             Object.Destroy(projectile);
         }
 
+        // Physically placed, animated 3D missile and blast volume — pre-alpha effect, not final VFX.
+        private System.Collections.IEnumerator NuclearStrikeAt(Vector3 target)
+        {
+            target.y=physicalTerrain!=null ? physicalTerrain.Height(target.x,target.z):0;
+            var payload=GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            payload.name="Descending ballistic warhead";
+            payload.transform.localScale=new Vector3(.85f,2.2f,.85f);
+            var warheadMaterial=NewMaterial(new Color(.42f,.42f,.43f));
+            payload.GetComponent<Renderer>().sharedMaterial=warheadMaterial;
+            Destroy(payload.GetComponent<Collider>());
+            var start=target+Vector3.up*70f;
+            BlackAlertSoundFx.Warning(target);
+            float t=0f;
+            while(t<3.6f)
+            {
+                t+=Time.deltaTime;
+                payload.transform.position=Vector3.Lerp(start,target+Vector3.up,
+                    Mathf.Clamp01(t/3.6f));
+                payload.transform.Rotate(Vector3.up,Time.deltaTime*24f);
+                yield return null;
+            }
+            Destroy(payload);
+            BlackAlertSoundFx.Explosion(target);
+            foreach(var unit in agents)
+            {
+                if(unit.model==null || unit.hp<=0)continue;
+                float distance=Vector3.Distance(target,unit.model.transform.position);
+                if(distance<20f)
+                {
+                    unit.hp-=320f*(1f-distance/22f);
+                    if(unit.hp<=0)
+                    {
+                        Destroy(unit.model); unit.model=null;
+                    }
+                    else
+                    {
+                        var direction=(unit.model.transform.position-target);
+                        direction.y=0;
+                        if(direction.sqrMagnitude>.01f)
+                            unit.model.transform.position+=direction.normalized*(20f-distance)*.22f;
+                    }
+                }
+            }
+            var flash=GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            flash.name="Nuclear hot core / real-time animated";
+            flash.transform.position=target+Vector3.up*4f;
+            flash.GetComponent<Renderer>().sharedMaterial=NewMaterial(new Color(1f,.57f,.11f));
+            Destroy(flash.GetComponent<Collider>());
+            var shock=GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            shock.name="Nuclear radial blast wave";
+            shock.transform.position=target+Vector3.up*.15f;
+            shock.GetComponent<Renderer>().sharedMaterial=NewMaterial(new Color(.97f,.66f,.24f));
+            Destroy(shock.GetComponent<Collider>());
+            var ash=NewMaterial(new Color(.17f,.16f,.16f));
+            float age=0;
+            while(age<3.8f)
+            {
+                age+=Time.deltaTime;
+                float radius=1f+age*7f;
+                flash.transform.localScale=Vector3.one*(1f+age*4.7f);
+                shock.transform.localScale=new Vector3(radius,.035f,radius);
+                flash.transform.position=target+Vector3.up*(4f+age*4f);
+                yield return null;
+            }
+            Destroy(flash);
+            Destroy(shock);
+            var crater=GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            crater.name="Nuclear scorched crater";
+            crater.transform.position=target+Vector3.up*.1f;
+            crater.transform.localScale=new Vector3(14f,.07f,14f);
+            crater.GetComponent<Renderer>().sharedMaterial=ash;
+            Destroy(crater.GetComponent<Collider>());
+            Destroy(crater,85f);
+        }
+
         private void OnGUI()
         {
             GUI.skin.button.fontSize=18;
@@ -372,7 +459,13 @@ namespace BlackAlert
             {credits-=1600;SpawnJet(new Vector3(-28,13,Random.Range(-19f,19f)),false);}
             if(GUI.Button(new Rect(20, 443, 195, 55), "DESTROYER $2200") && credits>=2200)
             {credits-=2200;SpawnShip(new Vector3(0,.7f,-32),false);}
-            GUI.Label(new Rect(20, 512, 580, 60), "ENGINEERING MODELS: NOT FINAL ART. No online server connected.");
+            var nukeLabel=Time.time<nuclearReadyAt ?
+                "NUKE RECHARGING "+Mathf.CeilToInt(nuclearReadyAt-Time.time)+"s":
+                targetingNuclear ? "TAP TARGET ON MAP" : "NUCLEAR $3800";
+            if(GUI.Button(new Rect(20,505,195,55),nukeLabel) &&
+                Time.time>=nuclearReadyAt && credits>=3800)
+                targetingNuclear=!targetingNuclear;
+            GUI.Label(new Rect(20,574,680,40), "TEST GEOMETRY - NOT FINAL GRAPHICS OR ONLINE PLAY");
         }
     }
 }
