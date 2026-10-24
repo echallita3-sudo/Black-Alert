@@ -86,7 +86,10 @@ namespace BlackAlert
             friendMat = NewMaterial(new Color(0.12f, 0.6f, 0.95f));
             foeMat = NewMaterial(new Color(0.86f, 0.19f, 0.16f));
             earthMat = NewMaterial(new Color(0.20f, 0.31f, 0.25f));
-            waterMat = NewMaterial(new Color(0.08f, 0.35f, 0.6f));
+            var riverShader=Shader.Find("BlackAlert/RiverWater");
+            waterMat=riverShader!=null
+                ? new Material(riverShader)
+                : NewMaterial(new Color(.08f,.35f,.6f));
             BuildGround();
             BuildLighting();
             BuildBases();
@@ -289,14 +292,27 @@ namespace BlackAlert
         private void BuildLighting()
         {
             var l = new GameObject("Sun").AddComponent<Light>();
-            l.type = LightType.Directional;
-            l.intensity = 1.5f;
-            l.transform.rotation = Quaternion.Euler(48,-30,0);
+            l.type=LightType.Directional;
+            l.intensity=1.25f;
+            l.color=new Color(1f,.94f,.82f);
+            l.shadows=LightShadows.Soft;
+            l.shadowStrength=.60f;
+            l.transform.rotation=Quaternion.Euler(48,-30,0);
+            RenderSettings.ambientMode=UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight=new Color(.37f,.43f,.51f);
+            RenderSettings.fog=true;
+            RenderSettings.fogMode=FogMode.ExponentialSquared;
+            RenderSettings.fogColor=new Color(.37f,.44f,.51f);
+            RenderSettings.fogDensity=.0075f;
+            QualitySettings.shadowDistance=70f;
             var go = new GameObject("RTS Camera");
             cam = go.AddComponent<Camera>();
             go.AddComponent<AudioListener>();
-            cam.clearFlags = CameraClearFlags.Skybox;
-            cam.fieldOfView = 50;
+            cam.clearFlags=CameraClearFlags.SolidColor;
+            cam.backgroundColor=new Color(.39f,.46f,.52f);
+            cam.fieldOfView=48f;
+            cam.nearClipPlane=.1f;
+            cam.farClipPlane=220f;
             AlignCamera();
         }
 
