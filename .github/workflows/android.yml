@@ -1,22 +1,56 @@
-name: Android APK (experimental)
+name: Android APK (Unity)
 on:
   workflow_dispatch:
+    inputs:
+      build_note:
+        description: Optional test label
+        required: false
+        default: android-smoke-test
+
+permissions:
+  contents: read
+
 jobs:
-  build:
+  license-preflight:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    outputs:
+      configured: ${{ steps.license.outputs.configured }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Require Unity license
+      - name: Check activation secrets (never display values)
+        id: license
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        shell: bash
         run: |
-          if [ -z "$UNITY_LICENSE" ]; then
-            echo "::error::Unity GameCI license not configured; do not commit license data."
-            exit 1
+          if [ -n "$UNITY_LICENSE" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Unity license file is configured."
+          elif [ -n "$UNITY_SERIAL" ] && [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Unity Professional serial credentials are configured."
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No supported Unity activation secrets found. For Unity Personal, consult https://game.ci/docs/github/activation/ and add UNITY_LICENSE plus the required Unity credentials securely."
           fi
-      - name: Unity build
+
+  build:
+    needs: license-preflight
+    if: needs.license-preflight.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate source structure before expensive Unity job
+        run: python3 tools/check_source.py
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: unity-library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            unity-library-
+      - name: Compile and export with real Unity editor
         uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -24,14 +58,22 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
           UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
         with:
-          targetPlatform: Android
           unityVersion: 6000.0.60f1
+          targetPlatform: Android
           buildMethod: BlackAlert.Editor.AndroidBuilder.BuildAndroid
           androidExportType: androidPackage
           versioning: None
+      - name: Confirm output exists
+        shell: bash
+        run: |
+          test -s build/Android/BlackAlert.apk || {
+            echo "::error::Unity did not produce build/Android/BlackAlert.apk"
+            exit 1
+          }
+          ls -lh build/Android/BlackAlert.apk
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: BlackAlert-Android-Experimental
+          name: BlackAlert-Android-SmokeTest
           path: build/Android/
           if-no-files-found: warn
