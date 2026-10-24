@@ -39,6 +39,16 @@ namespace BlackAlert
         private GUIStyle headerStyle;
 
         public BattleMode Mode { get { return mode; } }
+        public List<AiObjective> GetCommanderObjectives()
+        {
+            var objectives=new List<AiObjective>();
+            if(mode==BattleMode.Battlefield)
+                foreach(var sector in sectors)
+                    objectives.Add(new AiObjective(sector.position.x,sector.position.z,
+                        sector.owner!=1));
+            return objectives;
+        }
+
         public bool MatchFinished { get { return match != null && match.Outcome != BattleOutcome.InProgress; } }
 
         public void Initialize(BattlefieldPrototype host)
