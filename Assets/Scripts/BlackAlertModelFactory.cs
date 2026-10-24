@@ -65,7 +65,6 @@ namespace BlackAlert
             selection.transform.SetParent(root.transform,false);
             selection.transform.localPosition = new Vector3(0,-.49f,0);
             var positions = new Vector3[96];
-            var triangles = new int[144];
             for(int i=0;i<48;i++)
             {
                 float angle=(i / 48f)*Mathf.PI*2;
@@ -73,16 +72,14 @@ namespace BlackAlert
                 positions[i*2]=radial*2.65f;
                 positions[i*2+1]=radial*2.45f;
                 int n=(i+1)%48;
-                int j=i*3;
-                triangles[j]=i*2; triangles[j+1]=n*2; triangles[j+2]=i*2+1;
             }
             // Two triangle strips for a clear ring visible at gameplay zoom.
             var tri=new int[48*6];
             for(int i=0;i<48;i++)
             {
                 int n=(i+1)%48, j=i*6;
-                tri[j]=i*2; tri[j+1]=n*2; tri[j+2]=i*2+1;
-                tri[j+3]=i*2+1;tri[j+4]=n*2;tri[j+5]=n*2+1;
+                tri[j]=i*2; tri[j+1]=i*2+1; tri[j+2]=n*2;
+                tri[j+3]=i*2+1; tri[j+4]=n*2+1; tri[j+5]=n*2;
             }
             var selectionMesh = new Mesh { vertices=positions, triangles=tri };
             selectionMesh.RecalculateNormals();
