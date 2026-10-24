@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using BlackAlert.Simulation;
 
 namespace BlackAlert
 {
@@ -19,12 +20,16 @@ namespace BlackAlert
             public bool infantry;
             public bool naval;
             public float momentum;
+            public float stunnedUntil;
             public bool selected;
         }
 
         private readonly List<Agent> agents = new List<Agent>();
         private Camera cam;
         private BlackAlertTerrain physicalTerrain;
+        private BlackAlertPlayableModes modeController;
+        public float BattleDuration { get { return battleTime; } }
+        public float TerrainHeight(float x,float z) { return physicalTerrain!=null?physicalTerrain.Height(x,z):0f; }
         private Vector3 camFocus = new Vector3(0, 0, 0);
         private float camHeight = 53f;
         private Agent selected;
@@ -74,22 +79,153 @@ namespace BlackAlert
             BuildGround();
             BuildLighting();
             BuildBases();
-            for (int i = 0; i < 5; i++)
+            CreateStartingArmies();
+            modeController=gameObject.AddComponent<BlackAlertPlayableModes>();
+            modeController.Initialize(this);
+        }
+
+        private void CreateStartingArmies()
+        {
+                for (int i = 0; i < 5; i++)
+                {
+                    Spawn(new Vector3(-27 + i*2.8f, 0, -9 + i%3*3f),false);
+                    Spawn(new Vector3(23 + i*2.8f, 0, 9 + i%3*3f),true);
+                }
+                for (int i=0; i<6; i++)
+                {
+                    SpawnInfantry(new Vector3(-25+i*1.6f,0,-16-i%2*1.7f),false);
+                    SpawnInfantry(new Vector3(22+i*1.6f,0,16+i%2*1.7f),true);
+                }
+                SpawnHelicopter(new Vector3(-26f,7f,24f), false);
+                SpawnHelicopter(new Vector3(26f,7f,-24f), true);
+                SpawnJet(new Vector3(-19f,13f,28f),false);
+                SpawnJet(new Vector3(19f,13f,-28f),true);
+                SpawnShip(new Vector3(0,.7f,-35f),false);
+                SpawnShip(new Vector3(0,.7f,35f),true);
+        }
+
+        public void RestartBattle()
+        {
+            StopAllCoroutines();
+            foreach(var unit in agents)if(unit.model!=null)Destroy(unit.model);
+            agents.Clear();
+            selected=null;
+            credits=5500;
+            battleTime=0;
+            shotsFired=0;
+            targetingNuclear=false;
+            nuclearReadyAt=0;
+            CreateStartingArmies();
+        }
+
+        public void SetDuelCamera(bool enabled)
+        {
+            camFocus=enabled?Vector3.zero:new Vector3(0,0,0);
+            camHeight=enabled?29f:53f;
+            AlignCamera();
+        }
+
+        public int CountLivingUnits(bool hostile)
+        {
+            int alive=0;
+            foreach(var a in agents) if(a.enemy==hostile && a.model!=null && a.hp>0) alive++;
+            return alive;
+        }
+
+        public int CountUnitsNear(Vector3 where,bool hostile,float radius)
+        {
+            int alive=0;
+            float r2=radius*radius;
+            foreach(var a in agents)
             {
-                Spawn(new Vector3(-27 + i*2.8f, 0, -9 + i%3*3f),false);
-                Spawn(new Vector3(23 + i*2.8f, 0, 9 + i%3*3f),true);
+                if(a.model==null || a.enemy!=hostile || a.hp<=0)continue;
+                Vector3 d=a.model.transform.position-where;d.y=0f;
+                if(d.sqrMagnitude<=r2)alive++;
             }
-            for (int i=0; i<6; i++)
+            return alive;
+        }
+
+        public void DamageOutsideCircle(float radius,float damage)
+        {
+            float radiusSquared=radius*radius;
+            foreach(var a in agents)
             {
-                SpawnInfantry(new Vector3(-25+i*1.6f,0,-16-i%2*1.7f),false);
-                SpawnInfantry(new Vector3(22+i*1.6f,0,16+i%2*1.7f),true);
+                if(a.model==null || a.hp<=0)continue;
+                Vector3 p=a.model.transform.position;p.y=0;
+                if(p.sqrMagnitude>radiusSquared)
+                    ApplyDamage(a,damage);
             }
-            SpawnHelicopter(new Vector3(-26f,7f,24f), false);
-            SpawnHelicopter(new Vector3(26f,7f,-24f), true);
-            SpawnJet(new Vector3(-19f,13f,28f),false);
-            SpawnJet(new Vector3(19f,13f,-28f),true);
-            SpawnShip(new Vector3(0,.7f,-35f),false);
-            SpawnShip(new Vector3(0,.7f,35f),true);
+        }
+
+        private void ApplyDamage(Agent target,float damage)
+        {
+            if(target==null || target.model==null || target.hp<=0)return;
+            target.hp=Mathf.Max(0,target.hp-damage);
+            if(target.hp<=0)
+            {
+                if(selected==target)selected=null;
+                Destroy(target.model);
+                target.model=null;
+            }
+        }
+
+        public void ApplyCardEffect(CardActivation card)
+        {
+            if(card==null)return;
+            Vector3 enemyCenter=new Vector3(22,0,0);
+            var enemy=agents.Find(a=>a.enemy && a.model!=null && a.hp>0);
+            if(enemy!=null)enemyCenter=enemy.model.transform.position;
+            switch(card.Effect)
+            {
+                case CardEffect.Artillery:
+                case CardEffect.Airstrike:
+                    StartCoroutine(TravelShell(enemyCenter+Vector3.up*30f,enemyCenter));
+                    AreaDamage(enemyCenter,card.Effect==CardEffect.Airstrike?18f:10f,
+                        card.Effect==CardEffect.Airstrike?65f:40f,true);
+                    break;
+                case CardEffect.EMP:
+                case CardEffect.Freeze:
+                    foreach(var a in agents)
+                        if(a.enemy && a.model!=null &&
+                           Vector3.Distance(a.model.transform.position,enemyCenter)<20f)
+                            a.stunnedUntil=Time.time+(card.Effect==CardEffect.EMP?8f:5f);
+                    break;
+                case CardEffect.Repair:
+                case CardEffect.Shield:
+                    foreach(var a in agents)if(!a.enemy && a.model!=null)
+                        a.hp=Mathf.Min(a.hp+(card.Effect==CardEffect.Repair?35f:55f),150f);
+                    break;
+                case CardEffect.Recon:
+                    camFocus=enemyCenter;AlignCamera();
+                    break;
+                case CardEffect.Supply:
+                    credits+=900;
+                    break;
+                case CardEffect.Reinforce:
+                case CardEffect.Decoy:
+                    for(int i=0;i<3;i++)
+                        SpawnInfantry(new Vector3(-24+i*2f,0,5f+i),false);
+                    break;
+                case CardEffect.AntiAir:
+                    foreach(var a in agents)if(a.enemy && a.model!=null && a.altitude>2f)
+                        ApplyDamage(a,30f);
+                    break;
+                case CardEffect.NuclearJammer:
+                    // Opponent superweapon cooldown logic is not yet integrated.
+                    credits+=500;
+                    break;
+            }
+        }
+
+        private void AreaDamage(Vector3 center,float radius,float amount,bool enemyOnly)
+        {
+            foreach(var a in agents)
+            {
+                if(a.model==null || a.hp<=0)continue;
+                if(enemyOnly && !a.enemy)continue;
+                float distance=Vector3.Distance(a.model.transform.position,center);
+                if(distance<radius) ApplyDamage(a,amount*Mathf.Clamp01(1f-distance/radius));
+            }
         }
 
         private void BuildGround()
@@ -200,11 +336,15 @@ namespace BlackAlert
                     if ((t.position-lastPointer).magnitude > 7f) dragCamera=true;
                     if (dragCamera) {camFocus -= new Vector3(t.deltaPosition.x*0.025f,0,t.deltaPosition.y*0.025f); AlignCamera();}
                 }
-                else if (t.phase==TouchPhase.Ended && !dragCamera) SelectOrOrder(t.position);
+                else if (t.phase==TouchPhase.Ended && !dragCamera &&
+                         (modeController==null || !modeController.BlocksWorldTouch(t.position)))
+                    SelectOrOrder(t.position);
                 return;
             }
 #if UNITY_EDITOR
-            if (Input.GetMouseButtonDown(0)) SelectOrOrder(Input.mousePosition);
+            if (Input.GetMouseButtonDown(0) &&
+                (modeController==null || !modeController.BlocksWorldTouch(Input.mousePosition)))
+                SelectOrOrder(Input.mousePosition);
             camHeight=Mathf.Clamp(camHeight-Input.mouseScrollDelta.y*3f,20f,100f);
             AlignCamera();
 #endif
@@ -323,6 +463,7 @@ namespace BlackAlert
                     }
                 }
                 a.cooldown-=Time.deltaTime;
+                if(Time.time<a.stunnedUntil)continue;
                 if(enemy!=null && best < 120f && a.cooldown<=0)
                 {
                     a.cooldown=a.infantry ? .8f : (a.naval ? 2.6f : 1.3f);
