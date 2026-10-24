@@ -39,8 +39,16 @@ namespace BlackAlert
             materials[name]=mat;
             return mat;
         }
-        private static Material Painted(bool red) =>
-            Mat(red?"crimson armor":"azure armor",Faction(red),.48f,.36f);
+        private static Material Painted(bool red)
+        {
+            var material=Mat(red?"crimson armor":"azure armor",Color.white,.48f,.36f);
+            if(material.mainTexture==null)
+            {
+                material.mainTexture=BlackAlertProceduralTextures.Camouflage(red);
+                material.mainTextureScale=new Vector2(2f,2f);
+            }
+            return material;
+        }
         private static Material Stripe(bool red) =>
             Mat(red?"crimson warning":"azure warning",FactionLight(red),.22f,.55f);
 
