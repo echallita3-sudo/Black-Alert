@@ -16,6 +16,9 @@ namespace BlackAlert
             public float cooldown;
             public float speed;
             public float altitude = .6f;
+            public bool infantry;
+            public bool naval;
+            public float momentum;
             public bool selected;
         }
 
@@ -34,6 +37,9 @@ namespace BlackAlert
         private int friendlyHQ = 1;
         private int enemyHQ = 1;
         private float battleTime;
+        private int shotsFired;
+        private float credits=5500;
+        private float nuclearReadyAt;
 
         private Material NewMaterial(Color color)
         {
@@ -67,13 +73,22 @@ namespace BlackAlert
             BuildGround();
             BuildLighting();
             BuildBases();
-            for (int i = 0; i < 7; i++)
+            for (int i = 0; i < 5; i++)
             {
-                Spawn(new Vector3(-22 + i * 2.5f, 0, -9 + i % 3 * 3f), false);
-                Spawn(new Vector3(18 + i * 2.5f, 0, 7 + i % 3 * 3f), true);
+                Spawn(new Vector3(-27 + i*2.8f, 0, -9 + i%3*3f),false);
+                Spawn(new Vector3(23 + i*2.8f, 0, 9 + i%3*3f),true);
             }
-            SpawnHelicopter(new Vector3(-25f,7f,19f), false);
-            SpawnHelicopter(new Vector3(25f,7f,-19f), true);
+            for (int i=0; i<6; i++)
+            {
+                SpawnInfantry(new Vector3(-25+i*1.6f,0,-16-i%2*1.7f),false);
+                SpawnInfantry(new Vector3(22+i*1.6f,0,16+i%2*1.7f),true);
+            }
+            SpawnHelicopter(new Vector3(-26f,7f,24f), false);
+            SpawnHelicopter(new Vector3(26f,7f,-24f), true);
+            SpawnJet(new Vector3(-19f,13f,28f),false);
+            SpawnJet(new Vector3(19f,13f,-28f),true);
+            SpawnShip(new Vector3(0,.7f,-35f),false);
+            SpawnShip(new Vector3(0,.7f,35f),true);
         }
 
         private void BuildGround()
@@ -114,23 +129,49 @@ namespace BlackAlert
             Cube("Crimson Command HQ",new Vector3(33,3,2),new Vector3(8,6,10),foeMat);
             BlackAlertModelFactory.CreateFactory(new Vector3(-35,0,22),false);
             BlackAlertModelFactory.CreateFactory(new Vector3(35,0,-22),true);
+            BlackAlertAdditionalModels.Reactor(new Vector3(-36,0,-28),false);
+            BlackAlertAdditionalModels.Reactor(new Vector3(36,0,28),true);
         }
 
-        private void Spawn(Vector3 p, bool hostile)
+        private void Spawn(Vector3 p,bool hostile)
         {
-            var model = BlackAlertModelFactory.CreateTank(p+Vector3.up*.6f,hostile);
-            agents.Add(new Agent {model=model,enemy=hostile,goal=p,speed=hostile?3.1f:3.8f,altitude=.6f});
+            p.y=.6f+(physicalTerrain!=null?physicalTerrain.Height(p.x,p.z):0);
+            var model=BlackAlertModelFactory.CreateTank(p,hostile);
+            agents.Add(new Agent {model=model,enemy=hostile,
+                goal=hostile?new Vector3(-22,0,p.z):p,speed=hostile?3.1f:3.8f,altitude=.6f});
         }
-
-        private void SpawnHelicopter(Vector3 p, bool hostile)
+        private void SpawnInfantry(Vector3 p,bool hostile)
         {
-            var model = BlackAlertModelFactory.CreateHelicopter(p,hostile);
-            agents.Add(new Agent {model=model,enemy=hostile,goal=p,speed=hostile?5f:5.5f,altitude=7f});
+            p.y=(physicalTerrain!=null?physicalTerrain.Height(p.x,p.z):0);
+            var model=BlackAlertAdditionalModels.Rifleman(p,hostile);
+            agents.Add(new Agent {model=model,enemy=hostile,
+                goal=hostile?new Vector3(-21,0,p.z):p,speed=hostile?3.7f:4.2f,altitude=.1f,infantry=true});
+        }
+        private void SpawnHelicopter(Vector3 p,bool hostile)
+        {
+            var model=BlackAlertModelFactory.CreateHelicopter(p,hostile);
+            agents.Add(new Agent {model=model,enemy=hostile,
+                goal=hostile?new Vector3(-20,0,p.z):p,speed=hostile?5f:5.5f,altitude=7f});
+        }
+        private void SpawnJet(Vector3 p,bool hostile)
+        {
+            var model=BlackAlertAdditionalModels.Jet(p,hostile);
+            agents.Add(new Agent {model=model,enemy=hostile,
+                goal=hostile?new Vector3(-22,0,p.z):p,speed=hostile?10f:11f,altitude=13f});
+        }
+        private void SpawnShip(Vector3 p,bool hostile)
+        {
+            p.x=physicalTerrain!=null?physicalTerrain.RiverCenter(p.z):0;
+            var model=BlackAlertAdditionalModels.Destroyer(p,hostile);
+            agents.Add(new Agent {model=model,enemy=hostile,
+                goal=new Vector3(p.x,0,hostile?-18:18),speed=hostile?2.7f:2.3f,
+                altitude=.7f,naval=true});
         }
 
         private void Update()
         {
             battleTime += Time.deltaTime;
+            credits += Time.deltaTime*5f;
             UpdateInput();
             Simulate();
         }
@@ -216,31 +257,47 @@ namespace BlackAlert
                     var d=(b.model.transform.position-a.model.transform.position).sqrMagnitude;
                     if(d<best) {best=d;enemy=b;}
                 }
-                if(a.enemy && enemy!=null && best<190f) a.goal=enemy.model.transform.position;
+                if(a.enemy && enemy!=null && best<2500f) a.goal=enemy.model.transform.position;
+                if(a.naval && physicalTerrain!=null)
+                    a.goal=new Vector3(physicalTerrain.RiverCenter(a.goal.z),.7f,
+                        Mathf.Clamp(a.goal.z,-40f,40f));
                 var position=a.model.transform.position;
-                var flatGoal=new Vector3(a.goal.x, a.altitude>2f ? a.altitude : .6f + (physicalTerrain!=null ? physicalTerrain.Height(a.goal.x,a.goal.z) : 0), a.goal.z);
+                var flatGoal=new Vector3(a.goal.x,
+                    a.naval ? .7f : a.altitude>2f ? a.altitude :
+                    a.altitude+(physicalTerrain!=null?physicalTerrain.Height(a.goal.x,a.goal.z):0),
+                    a.goal.z);
                 var diff=flatGoal-position;
-                if(diff.sqrMagnitude>4.5f && (enemy==null || best>70f || !a.enemy))
+                if(diff.sqrMagnitude>(a.infantry ? .55f : 4.5f) && (enemy==null || best>70f || !a.enemy))
                 {
                     float speedFactor=1f;
-                    if(physicalTerrain!=null && a.altitude<=2f)
+                    if(physicalTerrain!=null && a.altitude<=2f && !a.naval)
                     {
-                        bool infantry = a.model.name.Contains("Rifleman");
-                        bool tracked = !infantry;
                         var probe=Vector3.MoveTowards(position,flatGoal,Time.deltaTime*a.speed);
-                        if(!physicalTerrain.CanCross(probe,infantry,tracked))
+                        if(!physicalTerrain.CanCross(probe,a.infantry,!a.infantry))
                         {
                             a.goal=position;
                             continue;
                         }
-                        speedFactor=physicalTerrain.SpeedFactor(position,infantry,tracked);
+                        speedFactor=physicalTerrain.SpeedFactor(position,a.infantry,!a.infantry);
+                    }
+                    // Massive ships accelerate slowly; jets and helicopters fly above terrain.
+                    if(a.naval)
+                    {
+                        a.momentum=Mathf.MoveTowards(a.momentum,a.speed,Time.deltaTime*.5f);
+                        speedFactor=Mathf.Max(.1f,a.momentum/a.speed);
                     }
                     position=Vector3.MoveTowards(position,flatGoal,Time.deltaTime*a.speed*speedFactor);
-                    if(a.altitude<=2f && physicalTerrain!=null)
-                        position.y = .6f+physicalTerrain.Height(position.x,position.z);
+                    if(a.naval)position.y=.7f;
+                    else if(a.altitude<=2f && physicalTerrain!=null)
+                        position.y=a.altitude+physicalTerrain.Height(position.x,position.z);
                     a.model.transform.position=position;
-                    if(diff.sqrMagnitude>0.1f) a.model.transform.rotation=Quaternion.Slerp(a.model.transform.rotation,Quaternion.LookRotation(diff),Time.deltaTime*4f);
+                    if(diff.sqrMagnitude>0.1f)
+                        a.model.transform.rotation=Quaternion.Slerp(a.model.transform.rotation,
+                            Quaternion.LookRotation(new Vector3(diff.x,0,diff.z)),
+                            Time.deltaTime*(a.naval ? .55f : 4f));
                 }
+                else if(a.naval)
+                    a.momentum=Mathf.MoveTowards(a.momentum,0,Time.deltaTime*.32f);
                 if(enemy!=null)
                 {
                     var motion=a.model.GetComponent<BlackAlertVisualMotion>();
@@ -255,8 +312,9 @@ namespace BlackAlert
                 a.cooldown-=Time.deltaTime;
                 if(enemy!=null && best < 120f && a.cooldown<=0)
                 {
-                    a.cooldown=1.3f;
-                    enemy.hp-=18f;
+                    a.cooldown=a.infantry ? .8f : (a.naval ? 2.6f : 1.3f);
+                    shotsFired++;
+                    enemy.hp-=a.infantry?6f:a.naval?34f:18f;
                     if(enemy.hp<=0) {Object.Destroy(enemy.model);enemy.model=null;}
                     SpawnTracer(position+Vector3.up,enemy.model!=null?enemy.model.transform.position+Vector3.up:position+Vector3.forward*3);
                 }
@@ -295,12 +353,26 @@ namespace BlackAlert
 
         private void OnGUI()
         {
-            GUI.Label(new Rect(20, 20, 260, 55), "BLACK ALERT / 3D SYSTEM TEST");
+            GUI.skin.button.fontSize=18;
+            GUI.skin.label.fontSize=17;
+            GUI.Label(new Rect(20, 20, 520, 55), "BLACK ALERT / 3D LIVE COMBAT LAB");
             GUI.Label(new Rect(20, 82, 420, 30), "SKIRMISH TECH TEST — NOT FINAL ART");
-            GUI.Label(new Rect(20, 105, 450, 30), "Select a blue tank, then tap ground to move");
-            GUI.Label(new Rect(20, 128, 450, 30), "Elapsed: "+battleTime.ToString("0")+"s / Units: "+agents.Count);
-            if(GUI.Button(new Rect(20, 165, 200, 55), "DEPLOY TANK"))
-                Spawn(new Vector3(-23,0,-12+Random.Range(-12,12)),false);
+            GUI.Label(new Rect(20, 105, 700, 30), "Tap any Azure unit, then ground to move. Two fingers pan / pinch zoom.");
+            GUI.Label(new Rect(20, 132, 700, 30), "Credits "+(int)credits+"  Shots "+shotsFired+
+                "  Time "+battleTime.ToString("0")+"s");
+            GUI.Label(new Rect(20, 160, 700, 30), selected!=null&&selected.model!=null?
+                "Selected: "+selected.model.name:"Select an Azure unit to command");
+            if(GUI.Button(new Rect(20, 195, 195, 55), "BUILD TANK $700") && credits>=700)
+            {credits-=700;Spawn(new Vector3(-28,0,Random.Range(-20f,20f)),false);}
+            if(GUI.Button(new Rect(20, 257, 195, 55), "RIFLEMAN $100") && credits>=100)
+            {credits-=100;SpawnInfantry(new Vector3(-27,0,Random.Range(-19f,19f)),false);}
+            if(GUI.Button(new Rect(20, 319, 195, 55), "HELICOPTER $1200") && credits>=1200)
+            {credits-=1200;SpawnHelicopter(new Vector3(-27,7,Random.Range(-19f,19f)),false);}
+            if(GUI.Button(new Rect(20, 381, 195, 55), "JET $1600") && credits>=1600)
+            {credits-=1600;SpawnJet(new Vector3(-28,13,Random.Range(-19f,19f)),false);}
+            if(GUI.Button(new Rect(20, 443, 195, 55), "DESTROYER $2200") && credits>=2200)
+            {credits-=2200;SpawnShip(new Vector3(0,.7f,-32),false);}
+            GUI.Label(new Rect(20, 512, 580, 60), "ENGINEERING MODELS: NOT FINAL ART. No online server connected.");
         }
     }
 }
