@@ -68,7 +68,7 @@ namespace BlackAlert.Simulation
         }
         public void AddCommander(int id, int team)
         {
-            if (elapsed != 0 || Outcome != BattleOutcome.InProgress)
+            if (isStarted || elapsed != 0 || Outcome != BattleOutcome.InProgress)
                 throw new InvalidOperationException("Players must be registered before a match starts.");
             if (commanders.Count >= config.MaximumPlayers)
                 throw new InvalidOperationException("Room is full.");
@@ -78,6 +78,7 @@ namespace BlackAlert.Simulation
         }
         public void Begin()
         {
+            if (isStarted) throw new InvalidOperationException("Match already begun.");
             if (commanders.Count < 2) throw new InvalidOperationException("At least two players required.");
             if (commanders.Values.Select(c => c.Team).Distinct().Count() < 2)
                 throw new InvalidOperationException("At least two opposing teams required.");
