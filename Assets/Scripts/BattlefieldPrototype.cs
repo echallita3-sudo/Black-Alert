@@ -224,7 +224,7 @@ namespace BlackAlert
             var situation=new AiCommanderSituation(mode,32f,0f,-32f,0f,
                 crimsonEconomy.Credits,crimsonEconomy.TechLevel,
                 crimsonEconomy.PendingUnits,crimsonEconomy.LowPower,
-                owned,observed,objectives);
+                owned,observed,objectives,battleTime);
             var plan=tacticalBrain.Decide(situation);
             lastEnemyStrategy=plan.Strategy;
             if(plan.Structure!=null)crimsonEconomy.BuildStructure(plan.Structure);
@@ -528,7 +528,8 @@ namespace BlackAlert
             }
             ThinkEnemyCommander();
             UpdateInput();
-            Simulate();
+            if(modeController==null || !modeController.MatchFinished)
+                Simulate();
         }
 
         private void UpdateInput()
@@ -903,8 +904,7 @@ namespace BlackAlert
                     if(visual!=null)visual.Fire();
                     BlackAlertSoundFx.Shot(muzzle);
                     BlackAlertCombatEffects.MuzzleFlash(muzzle);
-                    enemy.hp-=a.infantry?6f:a.naval?34f:18f;
-                    if(enemy.hp<=0) {Object.Destroy(enemy.model);enemy.model=null;}
+                    ApplyDamage(enemy,a.infantry?6f:a.naval?34f:18f);
                     SpawnTracer(muzzle,impact);
                 }
                 else if((enemy==null || best>120f) && a.cooldown<=0 &&
@@ -916,7 +916,7 @@ namespace BlackAlert
                        (new Vector2(position.x-targetHQ.transform.position.x,
                            position.z-targetHQ.transform.position.z)).sqrMagnitude<225f)
                     {
-                        a.cooldown=a.infantry?.82f:a.naval?2.6f:1.3f;
+                        a.cooldown=a.infantry ? .82f : (a.naval ? 2.6f : 1.3f);
                         var visual=a.model.GetComponent<BlackAlertVehicleAnimator>();
                         var infantryVisual=a.model.GetComponent<BlackAlertInfantryAnimator>();
                         Vector3 muzzle=visual!=null?visual.MuzzlePosition:
