@@ -22,6 +22,7 @@ namespace BlackAlert
         private Transform drill;
         private Transform[] wheels;
         private Renderer orePileRenderer;
+        private GameObject worldVisualRoot;
         private Material body;
         private float traveled;
 
@@ -34,6 +35,7 @@ namespace BlackAlert
             refinery=refineryWorld;
             mine=oreWorld;
             task=Task.ToOre;
+            worldVisualRoot=new GameObject("Black Alert Ore and Refinery Props");
             wheels=new Transform[8];
             body=Mat(new Color(.14f,.46f,.67f));
             transform.position=WorldHeight(refinery);
@@ -104,7 +106,7 @@ namespace BlackAlert
         private void BuildOrePatch()
         {
             var patch=new GameObject("Harvestable Azure ore node / finite volume");
-            patch.transform.SetParent(transform.parent,false);
+            patch.transform.SetParent(worldVisualRoot.transform,false);
             patch.transform.position=new Vector3(mine.x,terrain.Height(mine.x,mine.z),mine.z);
             var mat=Mat(new Color(.54f,.59f,.71f));
             for(int i=0;i<11;i++)
@@ -125,7 +127,7 @@ namespace BlackAlert
         private void BuildRefinery()
         {
             var structure=new GameObject("Azure Ore Refinery / unloading depot");
-            structure.transform.SetParent(transform.parent,false);
+            structure.transform.SetParent(worldVisualRoot.transform,false);
             structure.transform.position=new Vector3(refinery.x,terrain.Height(refinery.x,refinery.z),refinery.z);
             var mat=Mat(new Color(.23f,.34f,.47f));
             var foundation=GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -144,6 +146,11 @@ namespace BlackAlert
                 tower.GetComponent<Renderer>().sharedMaterial=Mat(new Color(.18f,.23f,.29f));
                 Destroy(tower.GetComponent<Collider>());
             }
+        }
+
+        private void OnDestroy()
+        {
+            if(worldVisualRoot!=null)Destroy(worldVisualRoot);
         }
 
         private void Update()
