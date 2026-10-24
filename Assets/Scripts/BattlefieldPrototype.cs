@@ -87,8 +87,8 @@ namespace BlackAlert
         private Material foeMat;
         private Material earthMat;
         private Material waterMat;
-        private int friendlyHQ = 1;
-        private int enemyHQ = 1;
+        private StrongholdBattle headquarters;
+        private GameObject azureHeadquarters,crimsonHeadquarters;
         private float battleTime;
         private int shotsFired;
         private RtsEconomy economy;
@@ -136,6 +136,7 @@ namespace BlackAlert
             BuildGround();
             BuildLighting();
             BuildBases();
+            headquarters=new StrongholdBattle();
             StartEconomy();
             CreateStartingArmies();
             modeController=gameObject.AddComponent<BlackAlertPlayableModes>();
@@ -262,6 +263,9 @@ namespace BlackAlert
             shotsFired=0;
             targetingNuclear=false;
             nuclearReadyAt=0;
+            if(headquarters!=null)headquarters.Reset();
+            if(azureHeadquarters!=null)azureHeadquarters.SetActive(true);
+            if(crimsonHeadquarters!=null)crimsonHeadquarters.SetActive(true);
             CreateStartingArmies();
         }
 
@@ -270,6 +274,45 @@ namespace BlackAlert
             camFocus=enabled?Vector3.zero:new Vector3(0,0,0);
             camHeight=enabled?29f:53f;
             AlignCamera();
+        }
+
+        public int HeadquartersHP(bool hostile)
+        {
+            return headquarters==null?0:headquarters.Health(hostile?1:0);
+        }
+
+        private void DamageHeadquarters(int targetFaction,int amount,Vector3 impact)
+        {
+            if(headquarters==null || headquarters.Finished ||
+               headquarters.Health(targetFaction)==0)return;
+            int applied=headquarters.Damage(targetFaction,amount);
+            if(applied>0)BlackAlertCombatEffects.Hit(impact);
+            if(headquarters.Health(targetFaction)>0)return;
+            var model=targetFaction==0?azureHeadquarters:crimsonHeadquarters;
+            if(model!=null)
+            {
+                var explosionPoint=model.transform.position;
+                BlackAlertSoundFx.Explosion(explosionPoint);
+                BlackAlertCombatEffects.NuclearDetonation(explosionPoint);
+                var rubbleMaterial=NewMaterial(new Color(.24f,.23f,.22f));
+                for(int i=0;i<12;i++)
+                {
+                    var debris=GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    debris.name="Physics-enabled destroyed command HQ wreckage";
+                    debris.transform.position=explosionPoint+
+                        new Vector3(Random.Range(-3.0f,3.0f),Random.Range(0f,3.0f),
+                            Random.Range(-3f,3f));
+                    debris.transform.localScale=new Vector3(Random.Range(.6f,1.7f),
+                        Random.Range(.3f,1.4f),Random.Range(.7f,1.9f));
+                    debris.GetComponent<Renderer>().sharedMaterial=rubbleMaterial;
+                    var rb=debris.AddComponent<Rigidbody>();
+                    rb.mass=Random.Range(12f,40f);
+                    rb.AddExplosionForce(220f,explosionPoint-Vector3.up,12f,1.4f,
+                        ForceMode.Impulse);
+                    Destroy(debris,14f);
+                }
+                model.SetActive(false);
+            }
         }
 
         public int CountLivingUnits(bool hostile)
@@ -424,8 +467,10 @@ namespace BlackAlert
 
         private void BuildBases()
         {
-            Cube("Azure Command HQ",new Vector3(-33,3,-2),new Vector3(8,6,10),friendMat);
-            Cube("Crimson Command HQ",new Vector3(33,3,2),new Vector3(8,6,10),foeMat);
+            azureHeadquarters=Cube("Azure Command HQ",new Vector3(-33,3,-2),
+                new Vector3(8,6,10),friendMat);
+            crimsonHeadquarters=Cube("Crimson Command HQ",new Vector3(33,3,2),
+                new Vector3(8,6,10),foeMat);
             BlackAlertModelFactory.CreateFactory(new Vector3(-35,0,22),false);
             BlackAlertModelFactory.CreateFactory(new Vector3(35,0,-22),true);
             BlackAlertAdditionalModels.Reactor(new Vector3(-36,0,-28),false);
@@ -862,6 +907,30 @@ namespace BlackAlert
                     if(enemy.hp<=0) {Object.Destroy(enemy.model);enemy.model=null;}
                     SpawnTracer(muzzle,impact);
                 }
+                else if((enemy==null || best>120f) && a.cooldown<=0 &&
+                        headquarters!=null && !headquarters.Finished)
+                {
+                    int targetFaction=a.enemy?0:1;
+                    GameObject targetHQ=a.enemy?azureHeadquarters:crimsonHeadquarters;
+                    if(targetHQ!=null && targetHQ.activeSelf &&
+                       (new Vector2(position.x-targetHQ.transform.position.x,
+                           position.z-targetHQ.transform.position.z)).sqrMagnitude<225f)
+                    {
+                        a.cooldown=a.infantry?.82f:a.naval?2.6f:1.3f;
+                        var visual=a.model.GetComponent<BlackAlertVehicleAnimator>();
+                        var infantryVisual=a.model.GetComponent<BlackAlertInfantryAnimator>();
+                        Vector3 muzzle=visual!=null?visual.MuzzlePosition:
+                            infantryVisual!=null && infantryVisual.muzzle!=null?
+                            infantryVisual.muzzle.position:position+Vector3.up;
+                        if(visual!=null)visual.Fire();
+                        var point=targetHQ.transform.position;
+                        BlackAlertCombatEffects.MuzzleFlash(muzzle);
+                        BlackAlertSoundFx.Shot(muzzle);
+                        SpawnTracer(muzzle,point);
+                        DamageHeadquarters(targetFaction,
+                            a.infantry?9:a.naval?62:a.type==AiUnitType.Jet?45:28,point);
+                    }
+                }
             }
         }
 
@@ -1008,8 +1077,10 @@ namespace BlackAlert
                 economy.BuildStructure("tech");
             if(GUI.Button(new Rect(20,608,195,40),"NEW REACTOR $900"))
                 economy.BuildStructure("reactor");
-            GUI.Label(new Rect(20,653,710,28),
-                "Production "+economy.PendingUnits+" | "+
+            GUI.Label(new Rect(20,653,930,28),
+                "HQ "+HeadquartersHP(false)+"/"+StrongholdBattle.DefaultHealth+
+                " | Enemy HQ "+HeadquartersHP(true)+"/"+StrongholdBattle.DefaultHealth+
+                " | Production "+economy.PendingUnits+" | "+
                 (economy.FirstQueuedUnit??"Idle")+" "+
                 economy.FirstQueueRemaining.ToString("0.0")+"s"+
                 (economy.LowPower?" | LOW POWER":""));
