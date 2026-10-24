@@ -12,6 +12,9 @@ namespace BlackAlert
         {
             public GameObject model;
             public bool enemy;
+            public AiUnitType type;
+            public bool aiRetreat;
+            public int preferredTargetId=-1;
             public float hp = 100f;
             public Vector3 goal;
             public float cooldown;
@@ -89,6 +92,10 @@ namespace BlackAlert
         private float battleTime;
         private int shotsFired;
         private RtsEconomy economy;
+        private RtsEconomy crimsonEconomy;
+        private TacticalCommanderBrain tacticalBrain;
+        private AiStrategy lastEnemyStrategy=AiStrategy.Hold;
+        private float nextEnemyDecision;
         private BlackAlertOreHarvester harvester;
         private float nuclearReadyAt;
         private bool targetingNuclear;
@@ -167,17 +174,78 @@ namespace BlackAlert
             harvester=oreVehicle.AddComponent<BlackAlertOreHarvester>();
             harvester.Configure(economy,physicalTerrain,"Azure Ore Field",
                 new Vector3(-31,0,-24),new Vector3(-19,0,-31));
+            // The opponent uses a virtual (not yet animated) ore-delivery truck.
+            crimsonEconomy=new RtsEconomy(3000);
+            crimsonEconomy.AddOreNode("Crimson Ore Field",4600);
+            crimsonEconomy.AssignHarvester("Crimson Ore Field");
+            tacticalBrain=new TacticalCommanderBrain(2);
+            lastEnemyStrategy=AiStrategy.Hold;
+            nextEnemyDecision=0f;
         }
 
-        private void DeliverProduction(string id)
+        private void DeliverProduction(string id,bool hostile=false)
         {
+            if(CountLivingUnits(hostile)>=32)return;
+            float x=hostile?27f:-27f;
+            float z=Random.Range(-16f,16f);
             switch(id)
             {
-                case "rifleman": SpawnInfantry(new Vector3(-26,0,Random.Range(-16f,16f)),false);break;
-                case "tank": Spawn(new Vector3(-27,0,Random.Range(-16f,16f)),false);break;
-                case "helicopter": SpawnHelicopter(new Vector3(-27,7,Random.Range(-16f,16f)),false);break;
-                case "jet": SpawnJet(new Vector3(-27,13,Random.Range(-16f,16f)),false);break;
-                case "destroyer": SpawnShip(new Vector3(0,.7f,-32),false);break;
+                case "rifleman": SpawnInfantry(new Vector3(x,0,z),hostile);break;
+                case "tank": Spawn(new Vector3(x,0,z),hostile);break;
+                case "helicopter": SpawnHelicopter(new Vector3(x,7,z),hostile);break;
+                case "jet": SpawnJet(new Vector3(x,13,z),hostile);break;
+                case "destroyer": SpawnShip(new Vector3(0,.7f,hostile?32:-32),hostile);break;
+            }
+        }
+
+        private void ThinkEnemyCommander()
+        {
+            if(tacticalBrain==null || crimsonEconomy==null ||
+               Time.time<nextEnemyDecision)return;
+            nextEnemyDecision=Time.time+4.5f;
+
+            var owned=new List<AiUnitIntel>();
+            var observed=new List<AiUnitIntel>();
+            for(int i=0;i<agents.Count;i++)
+            {
+                Agent agent=agents[i];
+                if(agent.model==null || agent.hp<=0)continue;
+                Vector3 p=agent.model.transform.position;
+                var snapshot=new AiUnitIntel(i,agent.type,p.x,p.z,
+                    Mathf.Clamp01(agent.hp/100f));
+                if(agent.enemy)owned.Add(snapshot);
+                else if(tacticalIntel==null || tacticalIntel.CanSpot(true,p))
+                    observed.Add(snapshot);
+            }
+            var mode=modeController!=null?modeController.Mode:BattleMode.Skirmish;
+            var objectives=modeController!=null?modeController.GetCommanderObjectives():
+                new List<AiObjective>();
+            var situation=new AiCommanderSituation(mode,32f,0f,-32f,0f,
+                crimsonEconomy.Credits,crimsonEconomy.TechLevel,
+                crimsonEconomy.PendingUnits,crimsonEconomy.LowPower,
+                owned,observed,objectives);
+            var plan=tacticalBrain.Decide(situation);
+            lastEnemyStrategy=plan.Strategy;
+            if(plan.Structure!=null)crimsonEconomy.BuildStructure(plan.Structure);
+            if(plan.ProductionUnit!=null)crimsonEconomy.QueueUnit(plan.ProductionUnit);
+
+            foreach(var command in plan.Orders)
+            {
+                if(command.UnitId<0 || command.UnitId>=agents.Count)continue;
+                var agent=agents[command.UnitId];
+                if(!agent.enemy || agent.model==null || agent.hp<=0)continue;
+                agent.aiRetreat=command.Action==AiOrderType.Retreat;
+                agent.preferredTargetId=command.Action==AiOrderType.Engage ?
+                    command.TargetEnemyId : -1;
+                var target=new Vector3(Mathf.Clamp(command.TargetX,-45f,45f),
+                    0f,Mathf.Clamp(command.TargetZ,-40f,40f));
+                // Replan only if the new tactical goal is meaningfully different.
+                Vector3 previous=agent.route.Count>0?agent.route.ToArray()[agent.route.Count-1]:agent.goal;
+                if((target-previous).sqrMagnitude<16f && agent.route.Count>0)continue;
+                if(agent.altitude>2f || agent.naval)
+                    agent.goal=target;
+                else
+                    PlanRoute(agent,target);
             }
         }
 
@@ -368,7 +436,7 @@ namespace BlackAlert
         {
             p.y=.6f+(physicalTerrain!=null?physicalTerrain.Height(p.x,p.z):0);
             var model=BlackAlertDetailedVehicleArt.Tank(p,hostile);
-            agents.Add(new Agent {model=model,enemy=hostile,
+            agents.Add(new Agent {model=model,enemy=hostile,type=AiUnitType.Tank,
                 goal=hostile?new Vector3(-22,0,p.z):p,speed=hostile?3.1f:3.8f,altitude=.6f});
         }
         private void SpawnInfantry(Vector3 p,bool hostile)
@@ -376,19 +444,19 @@ namespace BlackAlert
             p.y=(physicalTerrain!=null?physicalTerrain.Height(p.x,p.z):0);
             var model=BlackAlertDetailedInfantryArt.Create(p,hostile);
             agents.Add(new Agent {model=model,enemy=hostile,
-                goal=hostile?new Vector3(-21,0,p.z):p,speed=hostile?3.7f:4.2f,altitude=.1f,infantry=true});
+                goal=hostile?new Vector3(-21,0,p.z):p,speed=hostile?3.7f:4.2f,altitude=.1f,infantry=true,type=AiUnitType.Rifleman});
         }
         private void SpawnHelicopter(Vector3 p,bool hostile)
         {
             var model=BlackAlertDetailedVehicleArt.Helicopter(p,hostile);
             agents.Add(new Agent {model=model,enemy=hostile,
-                goal=hostile?new Vector3(-20,0,p.z):p,speed=hostile?5f:5.5f,altitude=7f});
+                goal=hostile?new Vector3(-20,0,p.z):p,speed=hostile?5f:5.5f,altitude=7f,type=AiUnitType.Helicopter});
         }
         private void SpawnJet(Vector3 p,bool hostile)
         {
             var model=BlackAlertDetailedVehicleArt.Jet(p,hostile);
             agents.Add(new Agent {model=model,enemy=hostile,
-                goal=hostile?new Vector3(-22,0,p.z):p,speed=hostile?10f:11f,altitude=13f});
+                goal=hostile?new Vector3(-22,0,p.z):p,speed=hostile?10f:11f,altitude=13f,type=AiUnitType.Jet});
         }
         private void SpawnShip(Vector3 p,bool hostile)
         {
@@ -396,7 +464,7 @@ namespace BlackAlert
             var model=BlackAlertDetailedVehicleArt.Destroyer(p,hostile);
             agents.Add(new Agent {model=model,enemy=hostile,
                 goal=new Vector3(p.x,0,hostile?-18:18),speed=hostile?2.7f:2.3f,
-                altitude=.7f,naval=true});
+                altitude=.7f,naval=true,type=AiUnitType.Destroyer});
         }
 
         private void Update()
@@ -407,6 +475,13 @@ namespace BlackAlert
                 economy.Tick(Time.deltaTime);
                 foreach(string unit in economy.CollectCompleted())DeliverProduction(unit);
             }
+            if(crimsonEconomy!=null)
+            {
+                crimsonEconomy.Tick(Time.deltaTime);
+                foreach(string unit in crimsonEconomy.CollectCompleted())
+                    DeliverProduction(unit,true);
+            }
+            ThinkEnemyCommander();
             UpdateInput();
             Simulate();
         }
@@ -694,7 +769,8 @@ namespace BlackAlert
                     var d=(b.model.transform.position-a.model.transform.position).sqrMagnitude;
                     if(d<best) {best=d;enemy=b;}
                 }
-                if(a.enemy && enemy!=null && best<2500f && Time.time>=a.nextPathAt)
+                if(a.enemy && tacticalBrain==null && enemy!=null &&
+                   best<2500f && Time.time>=a.nextPathAt)
                 {
                     if(a.altitude>2f || a.naval)
                         a.goal=enemy.model.transform.position;
@@ -720,7 +796,8 @@ namespace BlackAlert
                         a.altitude+physicalTerrain.Height(a.goal.x,a.goal.z),a.goal.z);
                     diff=flatGoal-position;
                 }
-                if(diff.sqrMagnitude>(a.infantry ? .55f : 4.5f) && (enemy==null || best>70f || !a.enemy))
+                if(diff.sqrMagnitude>(a.infantry ? .55f : 4.5f) &&
+                    (enemy==null || best>70f || !a.enemy || a.aiRetreat))
                 {
                     float speedFactor=1f;
                     if(physicalTerrain!=null && a.altitude<=2f && !a.naval)
@@ -936,7 +1013,10 @@ namespace BlackAlert
                 (economy.FirstQueuedUnit??"Idle")+" "+
                 economy.FirstQueueRemaining.ToString("0.0")+"s"+
                 (economy.LowPower?" | LOW POWER":""));
-            GUI.Label(new Rect(20,686,680,28),"Offline test | squad selection, orders, production | full art pending");
+            GUI.Label(new Rect(20,686,880,28),
+                "ENEMY AI "+lastEnemyStrategy+" | Crimson credits "+
+                (crimsonEconomy!=null?crimsonEconomy.Credits:0)+
+                " | Offline prototype, final art and online pending");
             if(dragSelect)
             {
                 float x=Mathf.Min(dragOrigin.x,dragEndpoint.x);
