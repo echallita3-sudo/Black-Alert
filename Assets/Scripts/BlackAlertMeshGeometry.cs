@@ -162,7 +162,7 @@ namespace BlackAlert
             };
             for(int c=0;c<4;c++)
             {
-                float begin=(c-1)*Mathf.PI/2f;
+                float begin=Mathf.PI+c*Mathf.PI/2f;
                 for(int s=0;s<=cornerSegments;s++)
                 {
                     float a=begin+s*Mathf.PI/(2f*cornerSegments);
