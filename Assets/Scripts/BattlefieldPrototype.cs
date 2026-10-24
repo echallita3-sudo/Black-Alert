@@ -21,6 +21,8 @@ namespace BlackAlert
             public bool naval;
             public float momentum;
             public float stunnedUntil;
+            public float nextPathAt;
+            public readonly Queue<Vector3> route = new Queue<Vector3>();
             public bool selected;
         }
 
@@ -513,10 +515,46 @@ namespace BlackAlert
                 // Mobile-friendly formation offsets prevent 8 tanks from stacking.
                 float dx=(count%4-1.5f)*2.45f;
                 float dz=(count/4)*2.45f;
-                a.goal=new Vector3(Mathf.Clamp(position.x+dx,-46f,46f),0,
+                Vector3 target=new Vector3(Mathf.Clamp(position.x+dx,-46f,46f),0,
                     Mathf.Clamp(position.z+dz,-42f,42f));
+                PlanRoute(a,target);
                 count++;
             }
+        }
+
+        private void PlanRoute(Agent unit,Vector3 destination)
+        {
+            unit.route.Clear();
+            if(physicalTerrain==null || unit.altitude>2f || unit.naval)
+            {
+                unit.goal=destination;
+                return;
+            }
+
+            // The navigation grid covers the actual 100x90m battlefield at 2m intervals.
+            // A* avoids steep impassable mountain sections and chooses cheaper roads/bridges.
+            const int width=50,height=45;
+            int sx=Mathf.Clamp(Mathf.RoundToInt((unit.model.transform.position.x+49f)/2f),0,width-1);
+            int sz=Mathf.Clamp(Mathf.RoundToInt((unit.model.transform.position.z+44f)/2f),0,height-1);
+            int gx=Mathf.Clamp(Mathf.RoundToInt((destination.x+49f)/2f),0,width-1);
+            int gz=Mathf.Clamp(Mathf.RoundToInt((destination.z+44f)/2f),0,height-1);
+            var navigator=new GridPathfinder(width,height,
+                (x,z)=>physicalTerrain.CanCross(new Vector3(-49f+x*2f,0,-44f+z*2f),
+                    unit.infantry,!unit.infantry),
+                (x,z)=>Mathf.Max(0f,1f/physicalTerrain.SpeedFactor(
+                    new Vector3(-49f+x*2f,0,-44f+z*2f),
+                    unit.infantry,!unit.infantry)-1f));
+            var path=navigator.Find(new GridCell(sx,sz),new GridCell(gx,gz));
+            if(path.Count<1)
+            {
+                Debug.LogWarning("[BLACK ALERT NAV] Route blocked: "+unit.model.name);
+                unit.goal=unit.model.transform.position;
+                return;
+            }
+            for(int i=1;i<path.Count;i++)
+                unit.route.Enqueue(new Vector3(-49f+path[i].X*2f,0,-44f+path[i].Y*2f));
+            if(unit.route.Count>0)unit.goal=unit.route.Dequeue();
+            else unit.goal=destination;
         }
 
         private void AlignCamera()
@@ -584,7 +622,13 @@ namespace BlackAlert
                     var d=(b.model.transform.position-a.model.transform.position).sqrMagnitude;
                     if(d<best) {best=d;enemy=b;}
                 }
-                if(a.enemy && enemy!=null && best<2500f) a.goal=enemy.model.transform.position;
+                if(a.enemy && enemy!=null && best<2500f && Time.time>=a.nextPathAt)
+                {
+                    if(a.altitude>2f || a.naval)
+                        a.goal=enemy.model.transform.position;
+                    else PlanRoute(a,enemy.model.transform.position);
+                    a.nextPathAt=Time.time+3.5f;
+                }
                 if(a.naval && physicalTerrain!=null)
                     a.goal=new Vector3(physicalTerrain.RiverCenter(a.goal.z),.7f,
                         Mathf.Clamp(a.goal.z,-40f,40f));
@@ -594,6 +638,16 @@ namespace BlackAlert
                     a.altitude+(physicalTerrain!=null?physicalTerrain.Height(a.goal.x,a.goal.z):0),
                     a.goal.z);
                 var diff=flatGoal-position;
+                float waypointRange=a.infantry ? .75f : 1.95f;
+                Vector3 planeDiff=diff;planeDiff.y=0;
+                if(planeDiff.magnitude<waypointRange && a.route.Count>0)
+                {
+                    a.goal=a.route.Dequeue();
+                    flatGoal=new Vector3(a.goal.x,
+                        a.altitude>2f ? a.altitude :
+                        a.altitude+physicalTerrain.Height(a.goal.x,a.goal.z),a.goal.z);
+                    diff=flatGoal-position;
+                }
                 if(diff.sqrMagnitude>(a.infantry ? .55f : 4.5f) && (enemy==null || best>70f || !a.enemy))
                 {
                     float speedFactor=1f;
