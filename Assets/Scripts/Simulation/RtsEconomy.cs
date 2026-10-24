@@ -80,6 +80,22 @@ namespace BlackAlert.Simulation
             if(ore.ContainsKey(id))throw new ArgumentException("Duplicate ore patch.");
             ore.Add(id,new OreNode(id,unitsRemaining));
         }
+        public int LoadOre(string oreId,int capacity)
+        {
+            if(capacity<=0)throw new ArgumentOutOfRangeException(nameof(capacity));
+            if(!ore.TryGetValue(oreId,out OreNode node))
+                throw new ArgumentException("Unknown ore patch.");
+            int cargo=Math.Min(capacity,node.Remaining);
+            node.Remaining-=cargo;
+            return cargo;
+        }
+        public void DeliverOre(int cargo)
+        {
+            if(cargo<0)throw new ArgumentOutOfRangeException(nameof(cargo));
+            AddCredits(cargo);
+            TotalHarvested=checked(TotalHarvested+cargo);
+        }
+
         public void AssignHarvester(string oreId)
         {
             if(!ore.ContainsKey(oreId))throw new ArgumentException("Unknown ore patch.");
