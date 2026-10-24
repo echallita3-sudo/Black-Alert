@@ -111,8 +111,9 @@ namespace BlackAlert
             var go=new GameObject("3D mountain terrain");
             go.transform.SetParent(transform,false);
             go.AddComponent<MeshFilter>().sharedMesh=mesh;
-            var shader=Shader.Find("BlackAlert/VertexColorTerrain");
-            if(shader == null) shader=Shader.Find("Standard");
+            var shader=Resources.Load<Shader>("Shaders/TerrainFogBundled");
+            if(shader==null)shader=Shader.Find("BlackAlert/VertexColorTerrain");
+            if(shader==null)shader=Shader.Find("Standard");
             terrainMaterial=new Material(shader);
             terrainMaterial.color=Color.white;
             terrainMaterial.mainTexture=BlackAlertProceduralTextures.GroundNoise();
