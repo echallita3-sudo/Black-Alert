@@ -279,15 +279,21 @@ static class Program
         ExpectError(()=>stronghold.Damage(0,-5),
             "negative base damage cannot heal a base");
 
+        var fullSiegeArmy=ours.Concat(new []{
+            new AiUnitIntel(6,AiUnitType.Tank,18,2,1f),
+            new AiUnitIntel(7,AiUnitType.Tank,20,2,1f),
+            new AiUnitIntel(8,AiUnitType.Tank,22,2,1f),
+            new AiUnitIntel(9,AiUnitType.Tank,24,2,1f)
+        }).ToArray();
         var siegeSituation=new AiCommanderSituation(BattleMode.Skirmish,
-            30,0,-30,0,2000,2,0,false,ours,new AiUnitIntel[0],
+            30,0,-30,0,2000,2,0,false,fullSiegeArmy,new AiUnitIntel[0],
             objectives,85);
         var siegePlan=brain.Decide(siegeSituation);
         Assert(siegePlan.Orders.Any(o=>o.Action==AiOrderType.Advance &&
             Math.Abs(o.TargetX+30)<.01f),
             "after reconnaissance an AI army advances toward the known enemy headquarters");
         var initialScout=new AiCommanderSituation(BattleMode.Skirmish,
-            30,0,-30,0,2000,2,0,false,ours,new AiUnitIntel[0],
+            30,0,-30,0,2000,2,0,false,fullSiegeArmy,new AiUnitIntel[0],
             objectives,15);
         Assert(brain.Decide(initialScout).Orders.Any(o=>o.Action==AiOrderType.Advance &&
             Math.Abs(o.TargetX)<.01f),
