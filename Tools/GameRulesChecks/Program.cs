@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using BlackAlert.Simulation;
 
 static class Program
@@ -208,6 +209,58 @@ static class Program
             "opposing factions maintain separate current sight");
         Assert(ridge.Count(0,IntelState.Explored)>0,
             "past visibility persists as explored memory");
+
+
+        var brain=new TacticalCommanderBrain(2);
+        var ours=new [] {
+            new AiUnitIntel(1,AiUnitType.Tank,20,5,1f),
+            new AiUnitIntel(2,AiUnitType.Rifleman,20,8,.18f),
+            new AiUnitIntel(3,AiUnitType.Rifleman,24,10,1f),
+            new AiUnitIntel(4,AiUnitType.Helicopter,17,12,1f),
+            new AiUnitIntel(5,AiUnitType.Destroyer,0,20,1f)
+        };
+        var objectives=new [] {new AiObjective(0,0,true)};
+        AiCommanderSituation Intel(BattleMode game,int credits,bool lowPower,int tech,
+            int pending,AiUnitIntel[] contacts)
+        {
+            return new AiCommanderSituation(game,30,0,-30,0,credits,tech,
+                pending,lowPower,ours,contacts,objectives);
+        }
+        var enemy=new []{new AiUnitIntel(8,AiUnitType.Tank,28,0,.9f)};
+        var defended=brain.Decide(Intel(BattleMode.Skirmish,3100,false,2,0,enemy));
+        Assert(defended.Strategy==AiStrategy.Defend,"AI defends base from spotted enemies");
+        Assert(defended.Orders.Count==ours.Length,"AI emits an order for each live unit");
+        var retreat=brain.Decide(Intel(BattleMode.Skirmish,2000,false,2,0,
+            new []{new AiUnitIntel(9,AiUnitType.Tank,14,7,.5f)}));
+        Assert(retreat.Orders.Any(o=>o.UnitId==2 && o.Action==AiOrderType.Retreat),
+            "damaged infantry retreat toward the base");
+        Assert(retreat.Orders.Any(o=>o.UnitId==5 && o.Action==AiOrderType.Guard),
+            "destroyers hold navigable river approaches");
+        var capture=brain.Decide(Intel(BattleMode.Battlefield,2000,false,2,0,
+            new AiUnitIntel[0]));
+        Assert(capture.Orders.Any(o=>o.Action==AiOrderType.Capture),
+            "Battlefield AI prioritizes objective capture");
+        var noContact=brain.Decide(Intel(BattleMode.Skirmish,2000,false,2,0,
+            new AiUnitIntel[0]));
+        Assert(noContact.Strategy==AiStrategy.Recon &&
+            noContact.Orders.All(o=>o.TargetEnemyId==-1),
+            "AI never targets unseen enemies");
+        var lowPower=brain.Decide(Intel(BattleMode.Skirmish,3100,true,2,0,enemy));
+        Assert(lowPower.Structure=="reactor" && lowPower.ProductionUnit==null,
+            "AI builds power before new units");
+        var techUpgrade=brain.Decide(Intel(BattleMode.Skirmish,3100,false,2,0,enemy));
+        Assert(techUpgrade.Structure=="tech","AI can invest in higher technology");
+        var antiAir=brain.Decide(Intel(BattleMode.Skirmish,3100,false,3,0,
+            new []{new AiUnitIntel(10,AiUnitType.Jet,12,3,1f)}));
+        Assert(antiAir.ProductionUnit=="jet","AI reacts to visible aircraft threats");
+        var fullQueue=brain.Decide(Intel(BattleMode.Skirmish,200,false,3,4,enemy));
+        Assert(fullQueue.ProductionUnit==null,"AI respects factory queue limit");
+        var survivalAi=brain.Decide(Intel(BattleMode.Survival,200,false,2,0,
+            new AiUnitIntel[0]));
+        Assert(survivalAi.Orders.Any(o=>o.Action==AiOrderType.Advance &&
+            Math.Abs(o.TargetX)<5 && Math.Abs(o.TargetZ)<5),
+            "survival AI navigates toward shrinking storm center");
+        ExpectError(()=>new TacticalCommanderBrain(4),"invalid AI difficulty rejected");
 
         Console.WriteLine("All "+successes+" headless simulation assertions passed. These do not validate Unity editor or APK.");
     }
