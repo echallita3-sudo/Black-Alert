@@ -30,8 +30,43 @@ namespace BlackAlert
         private Camera cam;
         private BlackAlertTerrain physicalTerrain;
         private BlackAlertPlayableModes modeController;
+        private BlackAlertTacticalIntel tacticalIntel;
         public float BattleDuration { get { return battleTime; } }
         public float TerrainHeight(float x,float z) { return physicalTerrain!=null?physicalTerrain.Height(x,z):0f; }
+
+        public bool IsWater(Vector3 p) { return physicalTerrain!=null && physicalTerrain.IsWater(p); }
+        public void SetFogMask(Texture2D texture)
+        {
+            if(physicalTerrain!=null)physicalTerrain.SetFogMask(texture);
+        }
+        public void JumpCameraTo(Vector3 target)
+        {
+            camFocus=new Vector3(target.x,0,target.z);
+            AlignCamera();
+        }
+        public void EnumerateScoutPositions(System.Action<bool,Vector3,int> visitor)
+        {
+            if(visitor==null)return;
+            foreach(var unit in agents)
+            {
+                if(unit.model==null || unit.hp<=0)continue;
+                int radius=unit.infantry?10:unit.naval?15:
+                    unit.altitude>9f?22:unit.altitude>2f?19:14;
+                visitor(unit.enemy,unit.model.transform.position,radius);
+            }
+        }
+        public void ApplyEnemyVisibility(System.Func<Vector3,bool> isVisible)
+        {
+            if(isVisible==null)return;
+            foreach(var unit in agents)
+            {
+                if(!unit.enemy || unit.model==null || unit.hp<=0)continue;
+                bool visible=isVisible(unit.model.transform.position);
+                if(unit.model.activeSelf!=visible)
+                    unit.model.SetActive(visible);
+            }
+        }
+
         private Vector3 camFocus = new Vector3(0, 0, 0);
         private float camHeight = 53f;
         private Agent selected;
@@ -97,6 +132,8 @@ namespace BlackAlert
             CreateStartingArmies();
             modeController=gameObject.AddComponent<BlackAlertPlayableModes>();
             modeController.Initialize(this);
+            tacticalIntel=gameObject.AddComponent<BlackAlertTacticalIntel>();
+            tacticalIntel.Initialize(this);
         }
 
         private void CreateStartingArmies()
@@ -402,8 +439,9 @@ namespace BlackAlert
                         fingerStartTime=Time.time;
                         dragCamera=false;
                         dragSelect=false;
-                        startedOnHud=modeController!=null &&
-                            modeController.BlocksWorldTouch(touch.position);
+                        startedOnHud=(modeController!=null &&
+                            modeController.BlocksWorldTouch(touch.position)) ||
+                            (tacticalIntel!=null && tacticalIntel.BlocksTap(touch.position));
                         break;
                     case TouchPhase.Moved:
                     case TouchPhase.Stationary:
@@ -424,11 +462,18 @@ namespace BlackAlert
                         }
                         break;
                     case TouchPhase.Ended:
-                        if(startedOnHud)break;
+                        if(startedOnHud)
+                        {
+                            if(tacticalIntel!=null)tacticalIntel.ProcessTap(touch.position);
+                            break;
+                        }
+                        if(tacticalIntel!=null && tacticalIntel.ProcessTap(touch.position))
+                            break;
                         if(dragSelect)
                             SelectRectangle(dragOrigin,touch.position);
                         else if(!dragCamera &&
-                                 (modeController==null || !modeController.BlocksWorldTouch(touch.position)))
+                                 (modeController==null || !modeController.BlocksWorldTouch(touch.position)) &&
+                                 (tacticalIntel==null || !tacticalIntel.BlocksTap(touch.position)))
                             SelectOrOrder(touch.position);
                         dragSelect=false;
                         break;
@@ -441,18 +486,22 @@ namespace BlackAlert
                 dragOrigin=Input.mousePosition;
                 dragEndpoint=dragOrigin;
                 dragSelect=false;
-                startedOnHud=modeController!=null &&
-                    modeController.BlocksWorldTouch(Input.mousePosition);
+                startedOnHud=(modeController!=null &&
+                    modeController.BlocksWorldTouch(Input.mousePosition)) ||
+                    (tacticalIntel!=null && tacticalIntel.BlocksTap(Input.mousePosition));
             }
             if(Input.GetMouseButton(0) && !startedOnHud)
             {
                 dragEndpoint=Input.mousePosition;
                 if((dragEndpoint-dragOrigin).sqrMagnitude>196f)dragSelect=true;
             }
-            if(Input.GetMouseButtonUp(0) && !startedOnHud)
+            if(Input.GetMouseButtonUp(0))
             {
-                if(dragSelect)SelectRectangle(dragOrigin,Input.mousePosition);
-                else SelectOrOrder(Input.mousePosition);
+                if(tacticalIntel!=null && tacticalIntel.ProcessTap(Input.mousePosition)){}
+                else if(!startedOnHud && dragSelect)
+                    SelectRectangle(dragOrigin,Input.mousePosition);
+                else if(!startedOnHud)
+                    SelectOrOrder(Input.mousePosition);
                 dragSelect=false;
             }
             camHeight=Mathf.Clamp(camHeight-Input.mouseScrollDelta.y*3f,20f,100f);
@@ -602,6 +651,9 @@ namespace BlackAlert
                 if(a.model != null && hit.collider != null && hit.collider.gameObject.transform.IsChildOf(a.model.transform))
                     {clicked=a;break;}
             }
+            if(clicked!=null && clicked.enemy && tacticalIntel!=null &&
+               !tacticalIntel.CanSelectEnemy(clicked.model.transform.position))
+                clicked=null;
             if(clicked!=null && !clicked.enemy)
             {
                 var matching=new List<Agent>();
@@ -636,6 +688,8 @@ namespace BlackAlert
                 foreach(var b in agents)
                 {
                     if(b.enemy==a.enemy || b.hp<=0 || b.model==null) continue;
+                    if(tacticalIntel!=null &&
+                        !tacticalIntel.CanSpot(a.enemy,b.model.transform.position))continue;
                     var d=(b.model.transform.position-a.model.transform.position).sqrMagnitude;
                     if(d<best) {best=d;enemy=b;}
                 }
