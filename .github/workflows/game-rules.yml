@@ -1,0 +1,25 @@
+name: Headless gameplay rules (no Unity minutes)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Assets/Scripts/Simulation/**'
+      - 'Tools/GameRulesChecks/**'
+      - '.github/workflows/game-rules.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gameplay-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compile pure C# game rules and run assertions
+        run: dotnet run --configuration Release --project Tools/GameRulesChecks/GameRulesChecks.csproj
