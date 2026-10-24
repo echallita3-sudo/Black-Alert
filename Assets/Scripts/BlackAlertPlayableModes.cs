@@ -155,8 +155,25 @@ namespace BlackAlert
         private void Update()
         {
             if(battle == null || match == null || match.Outcome != BattleOutcome.InProgress)return;
+            if(mode!=BattleMode.WorldWarIII)
+            {
+                if(battle.HeadquartersHP(false)==0)
+                    match.Eliminate(0);
+                else if(battle.HeadquartersHP(true)==0)
+                    match.Eliminate(1);
+            }
+            if(match.Outcome!=BattleOutcome.InProgress)
+            {
+                RecordResult();
+                return;
+            }
             float dt=Time.deltaTime;
             match.Tick(dt);
+            if(match.Outcome!=BattleOutcome.InProgress)
+            {
+                RecordResult();
+                return;
+            }
             if(duel != null)duel.Tick(dt);
 
             if(mode==BattleMode.Survival && survivalRing != null)
@@ -193,24 +210,29 @@ namespace BlackAlert
                     notification="Sector "+(sector.id+1)+" captured by "+(owner==0?"Azure":"Crimson");
                 }
             }
-            // Prevent match ending at first casualty or while a replacement can be produced.
-            if(mode!=BattleMode.WorldWarIII && battle.BattleDuration>=90f)
+            // Survival is eliminated by troop loss. Skirmish retains a comeback
+            // chance through its HQ and production facilities.
+            if(mode==BattleMode.Survival && battle.BattleDuration>=20f &&
+               match.Outcome==BattleOutcome.InProgress)
             {
-                if(battle.CountLivingUnits(false)==0 && !endRecorded)
+                if(battle.CountLivingUnits(false)==0)
                     match.Eliminate(0);
-                else if(battle.CountLivingUnits(true)==0 && !endRecorded)
+                else if(battle.CountLivingUnits(true)==0)
                     match.Eliminate(1);
             }
-            if(match.Outcome!=BattleOutcome.InProgress && !endRecorded)
-            {
-                endRecorded=true;
-                if(match.Outcome==BattleOutcome.Victory && match.WinningTeam==0)
-                    profile.RecordVictory();
-                else
-                    profile.RecordDefeat();
-                notification=match.Outcome==BattleOutcome.Draw?"DRAW":
-                    match.WinningTeam==0?"AZURE VICTORY":"CRIMSON VICTORY";
-            }
+            RecordResult();
+        }
+
+        private void RecordResult()
+        {
+            if(match==null || match.Outcome==BattleOutcome.InProgress || endRecorded)return;
+            endRecorded=true;
+            if(match.Outcome==BattleOutcome.Victory && match.WinningTeam==0)
+                profile.RecordVictory();
+            else if(match.Outcome==BattleOutcome.Victory)
+                profile.RecordDefeat();
+            notification=match.Outcome==BattleOutcome.Draw?"DRAW":
+                match.WinningTeam==0?"AZURE VICTORY":"CRIMSON VICTORY";
         }
 
         private void ApplyDuelCard()
