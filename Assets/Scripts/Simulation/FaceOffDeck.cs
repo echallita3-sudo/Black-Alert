@@ -47,6 +47,7 @@ namespace BlackAlert.Simulation
         private readonly List<TacticalCard> eligible;
         private readonly List<TacticalCard> hand = new List<TacticalCard>();
         private uint randomState;
+        private double rechargeBuffer;
         public IReadOnlyList<TacticalCard> Hand => hand;
         public int CareerLevel { get; private set; }
         public DuelRole Role { get; private set; }
@@ -94,11 +95,11 @@ namespace BlackAlert.Simulation
             if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds < 0 || seconds > 3600)
                 throw new ArgumentOutOfRangeException(nameof(seconds));
             MatchSeconds += seconds;
-            // One energy per 5 seconds, deterministic across differently sized frame steps.
-            int energy = (int)(MatchSeconds / 5.0);
-            Energy = Math.Min(MaxEnergy, initialEnergy + energy - spentEnergy);
+            rechargeBuffer += seconds;
+            int recharge = (int)(rechargeBuffer / 5.0);
+            rechargeBuffer -= recharge * 5.0;
+            Energy = Math.Min(MaxEnergy, Energy + recharge);
         }
-        private int initialEnergy = 5, spentEnergy;
         public TacticalCard Roll()
         {
             if (Role != DuelRole.RollingCards) throw new InvalidOperationException("Direct commander cannot roll cards.");
@@ -119,7 +120,6 @@ namespace BlackAlert.Simulation
                 throw new ArgumentOutOfRangeException("Target coordinates outside duel map.");
             if (!CanPlay(id)) throw new InvalidOperationException("Card locked, on cooldown, missing or insufficient energy.");
             TacticalCard card = definitions[id];
-            spentEnergy += card.EnergyCost;
             Energy = Math.Max(0, Energy - card.EnergyCost);
             readyTimes[id] = MatchSeconds + card.CooldownSeconds;
             int index = hand.FindIndex(c => c.Id == id);
