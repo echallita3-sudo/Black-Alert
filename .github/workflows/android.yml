@@ -1,0 +1,37 @@
+name: Android APK (experimental)
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require Unity license
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        run: |
+          if [ -z "$UNITY_LICENSE" ]; then
+            echo "::error::Unity GameCI license not configured; do not commit license data."
+            exit 1
+          fi
+      - name: Unity build
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        with:
+          targetPlatform: Android
+          unityVersion: 6000.0.60f1
+          buildMethod: BlackAlert.Editor.AndroidBuilder.BuildAndroid
+          androidExportType: androidPackage
+          versioning: None
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: BlackAlert-Android-Experimental
+          path: build/Android/
+          if-no-files-found: warn
