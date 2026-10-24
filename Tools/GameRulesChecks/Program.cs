@@ -104,6 +104,53 @@ static class Program
             new CountryTerritory("B","Other",2,1,1,2,new string[0])
         }),"reject broken country borders");
 
+        var economy=new RtsEconomy(5500);
+        economy.AddOreNode("A",220);
+        Assert(economy.Credits==5500 && economy.PowerGenerated==100,
+            "economy begins with credits and electricity supply");
+        var firstLoad=economy.LoadOre("A",110);
+        Assert(firstLoad==110 && economy.Ore["A"].Remaining==110,
+            "physical harvester removes finite ore cargo");
+        economy.DeliverOre(firstLoad);
+        Assert(economy.Credits==5610 && economy.TotalHarvested==110,
+            "credits are only gained when the refinery receives ore");
+        Assert(economy.QueueUnit("tank") && economy.Credits==4910,
+            "tank production reserves resources immediately");
+        Assert(economy.PendingUnits==1,"production order is queued");
+        economy.Tick(8);
+        Assert(economy.CollectCompleted().Count==0,"tank does not spawn before production completes");
+        economy.Tick(1);
+        var finished=economy.CollectCompleted();
+        Assert(finished.Count==1 && finished[0]=="tank",
+            "tank spawns after full build duration");
+        Assert(economy.CollectCompleted().Count==0,"collecting does not deliver unit twice");
+        Assert(!economy.QueueUnit("jet"),"jets are locked until tech center exists");
+        Assert(economy.BuildStructure("tech") && economy.TechLevel==3,
+            "tech building unlocks advanced aircraft");
+        Assert(economy.BuildStructure("factory") && economy.LowPower,
+            "additional buildings can overload available power");
+        Assert(economy.QueueUnit("jet"),"jet can be queued after tech research");
+        economy.Tick(17);
+        Assert(economy.CollectCompleted().Count==0,
+            "production slows under electrical deficit");
+        Assert(economy.BuildStructure("reactor") && !economy.LowPower,
+            "new reactor restores power to factory");
+        economy.Tick(13);
+        Assert(economy.CollectCompleted().Count==1,
+            "production finishes when sufficient power is restored");
+        Assert(economy.LoadOre("A",110)==110 && economy.Ore["A"].Remaining==0,
+            "ore field becomes depleted after last load");
+        Assert(economy.LoadOre("A",110)==0,"depleted ore does not grant infinite money");
+        ExpectError(()=>economy.DeliverOre(-1),"cannot create money using negative cargo");
+        ExpectError(()=>economy.Tick(-1),"negative simulation time is rejected");
+
+        var autoHarvester=new RtsEconomy(0);
+        autoHarvester.AddOreNode("A",110);
+        autoHarvester.AssignHarvester("A");
+        autoHarvester.Tick(8);
+        Assert(autoHarvester.Credits==110 && autoHarvester.TotalHarvested==110,
+            "headless economy can simulate a virtual harvester delivery");
+
         Console.WriteLine("All "+successes+" headless simulation assertions passed. These do not validate Unity editor or APK.");
     }
 }
