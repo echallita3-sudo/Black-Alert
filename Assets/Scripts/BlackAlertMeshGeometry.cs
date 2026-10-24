@@ -32,6 +32,11 @@ namespace BlackAlert
             mesh.name=name;
             if(vertices.Count>65535)mesh.indexFormat=UnityEngine.Rendering.IndexFormat.UInt32;
             mesh.SetVertices(vertices);
+            var uv=new List<Vector2>(vertices.Count);
+            foreach(var vertex in vertices)
+                uv.Add(new Vector2(vertex.x*.16f+vertex.z*.14f,
+                    vertex.y*.32f+vertex.z*.19f));
+            mesh.SetUVs(0,uv);
             mesh.SetTriangles(triangles,0);
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
