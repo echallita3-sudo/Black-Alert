@@ -33,7 +33,15 @@ namespace BlackAlert
         private Vector3 camFocus = new Vector3(0, 0, 0);
         private float camHeight = 53f;
         private Agent selected;
+        private readonly List<Agent> selectedGroup=new List<Agent>();
         private bool dragCamera;
+        private bool dragSelect;
+        private bool startedOnHud;
+        private Vector2 dragOrigin;
+        private Vector2 dragEndpoint;
+        private float fingerStartTime;
+        private float lastTapTime=-100f;
+        private string lastTappedType="";
         private Vector2 lastPointer;
         private Material friendMat;
         private Material foeMat;
@@ -136,6 +144,7 @@ namespace BlackAlert
             foreach(var unit in agents)if(unit.model!=null)Destroy(unit.model);
             agents.Clear();
             selected=null;
+            selectedGroup.Clear();
             StartEconomy();
             battleTime=0;
             shotsFired=0;
@@ -190,6 +199,7 @@ namespace BlackAlert
             if(target.hp<=0)
             {
                 if(selected==target)selected=null;
+                selectedGroup.Remove(target);
                 Destroy(target.model);
                 target.model=null;
             }
@@ -346,38 +356,167 @@ namespace BlackAlert
 
         private void UpdateInput()
         {
-            if (cam == null) return;
-            if (Input.touchCount >= 2)
+            if(cam==null)return;
+            if(Input.touchCount>=2)
             {
-                var a=Input.GetTouch(0); var b=Input.GetTouch(1);
-                var prev=(a.position-a.deltaPosition)-(b.position-b.deltaPosition);
-                float before=prev.magnitude, now=(a.position-b.position).magnitude;
-                camHeight=Mathf.Clamp(camHeight+(before-now)*0.05f,20f,100f);
-                camFocus -= new Vector3((a.deltaPosition.x+b.deltaPosition.x)*0.025f,0,(a.deltaPosition.y+b.deltaPosition.y)*0.025f);
+                dragSelect=false;
+                var first=Input.GetTouch(0);
+                var second=Input.GetTouch(1);
+                var previous=(first.position-first.deltaPosition) -
+                             (second.position-second.deltaPosition);
+                float earlier=previous.magnitude;
+                float now=(first.position-second.position).magnitude;
+                camHeight=Mathf.Clamp(camHeight+(earlier-now)*.045f,20f,100f);
+                camFocus-=new Vector3((first.deltaPosition.x+second.deltaPosition.x)*.023f,
+                    0,(first.deltaPosition.y+second.deltaPosition.y)*.023f);
                 AlignCamera();
                 return;
             }
-            if (Input.touchCount == 1)
+            if(Input.touchCount==1)
             {
-                var t=Input.GetTouch(0);
-                if (t.phase==TouchPhase.Began) {lastPointer=t.position;dragCamera=false;}
-                else if (t.phase==TouchPhase.Moved)
+                var touch=Input.GetTouch(0);
+                switch(touch.phase)
                 {
-                    if ((t.position-lastPointer).magnitude > 7f) dragCamera=true;
-                    if (dragCamera) {camFocus -= new Vector3(t.deltaPosition.x*0.025f,0,t.deltaPosition.y*0.025f); AlignCamera();}
+                    case TouchPhase.Began:
+                        dragOrigin=touch.position;
+                        dragEndpoint=touch.position;
+                        fingerStartTime=Time.time;
+                        dragCamera=false;
+                        dragSelect=false;
+                        startedOnHud=modeController!=null &&
+                            modeController.BlocksWorldTouch(touch.position);
+                        break;
+                    case TouchPhase.Moved:
+                    case TouchPhase.Stationary:
+                        if(startedOnHud)break;
+                        dragEndpoint=touch.position;
+                        float distance=(dragEndpoint-dragOrigin).magnitude;
+                        if(!dragSelect && Time.time-fingerStartTime>.40f && distance>12f)
+                        {
+                            dragSelect=true;
+                            dragCamera=false;
+                        }
+                        if(!dragSelect && distance>7f)
+                        {
+                            dragCamera=true;
+                            camFocus-=new Vector3(touch.deltaPosition.x*.025f,0,
+                                touch.deltaPosition.y*.025f);
+                            AlignCamera();
+                        }
+                        break;
+                    case TouchPhase.Ended:
+                        if(startedOnHud)break;
+                        if(dragSelect)
+                            SelectRectangle(dragOrigin,touch.position);
+                        else if(!dragCamera &&
+                                 (modeController==null || !modeController.BlocksWorldTouch(touch.position)))
+                            SelectOrOrder(touch.position);
+                        dragSelect=false;
+                        break;
                 }
-                else if (t.phase==TouchPhase.Ended && !dragCamera &&
-                         (modeController==null || !modeController.BlocksWorldTouch(t.position)))
-                    SelectOrOrder(t.position);
                 return;
             }
 #if UNITY_EDITOR
-            if (Input.GetMouseButtonDown(0) &&
-                (modeController==null || !modeController.BlocksWorldTouch(Input.mousePosition)))
-                SelectOrOrder(Input.mousePosition);
+            if(Input.GetMouseButtonDown(0))
+            {
+                dragOrigin=Input.mousePosition;
+                dragEndpoint=dragOrigin;
+                dragSelect=false;
+                startedOnHud=modeController!=null &&
+                    modeController.BlocksWorldTouch(Input.mousePosition);
+            }
+            if(Input.GetMouseButton(0) && !startedOnHud)
+            {
+                dragEndpoint=Input.mousePosition;
+                if((dragEndpoint-dragOrigin).sqrMagnitude>196f)dragSelect=true;
+            }
+            if(Input.GetMouseButtonUp(0) && !startedOnHud)
+            {
+                if(dragSelect)SelectRectangle(dragOrigin,Input.mousePosition);
+                else SelectOrOrder(Input.mousePosition);
+                dragSelect=false;
+            }
             camHeight=Mathf.Clamp(camHeight-Input.mouseScrollDelta.y*3f,20f,100f);
             AlignCamera();
 #endif
+        }
+
+        private void SelectRectangle(Vector2 start,Vector2 finish)
+        {
+            float left=Mathf.Min(start.x,finish.x);
+            float right=Mathf.Max(start.x,finish.x);
+            float bottom=Mathf.Min(start.y,finish.y);
+            float top=Mathf.Max(start.y,finish.y);
+            var group=new List<Agent>();
+            foreach(var a in agents)
+            {
+                if(a.enemy || a.model==null || a.hp<=0)continue;
+                Vector3 screen=cam.WorldToScreenPoint(a.model.transform.position);
+                if(screen.z>0 && screen.x>=left && screen.x<=right &&
+                   screen.y>=bottom && screen.y<=top)
+                    group.Add(a);
+            }
+            ApplySelection(group);
+        }
+
+        private void SetSelectedRing(Agent a,bool visible)
+        {
+            if(a==null || a.model==null)return;
+            Transform ring=a.model.transform.Find("Selection Ring");
+            if(ring==null)
+            {
+                var marker=new GameObject("Selection Ring");
+                marker.transform.SetParent(a.model.transform,false);
+                marker.transform.localPosition=new Vector3(0,a.altitude>2f?-a.altitude:
+                    a.infantry ? .05f : -.49f,0);
+                var line=marker.AddComponent<LineRenderer>();
+                line.useWorldSpace=false;
+                line.loop=true;
+                line.positionCount=48;
+                line.startWidth=.17f;
+                line.endWidth=.17f;
+                var shader=Shader.Find("Sprites/Default");
+                if(shader==null)shader=Shader.Find("Standard");
+                var mat=new Material(shader);mat.color=new Color(.16f,.9f,1f);
+                line.sharedMaterial=mat;
+                float radius=a.infantry ? .82f : 2.3f;
+                for(int i=0;i<48;i++)
+                {
+                    float theta=i*Mathf.PI*2/48f;
+                    line.SetPosition(i,new Vector3(Mathf.Cos(theta)*radius,0,
+                        Mathf.Sin(theta)*radius));
+                }
+                ring=marker.transform;
+            }
+            ring.gameObject.SetActive(visible);
+        }
+
+        private void ApplySelection(List<Agent> group)
+        {
+            foreach(var old in selectedGroup)SetSelectedRing(old,false);
+            selectedGroup.Clear();
+            foreach(var a in group)
+            {
+                if(a==null || a.model==null || a.enemy)continue;
+                selectedGroup.Add(a);
+                SetSelectedRing(a,true);
+            }
+            selected=selectedGroup.Count>0?selectedGroup[0]:null;
+        }
+
+        private void IssueGroupOrder(Vector3 position)
+        {
+            int count=0;
+            foreach(var a in selectedGroup)
+            {
+                if(a==null || a.model==null || a.hp<=0)continue;
+                // Mobile-friendly formation offsets prevent 8 tanks from stacking.
+                float dx=(count%4-1.5f)*2.45f;
+                float dz=(count/4)*2.45f;
+                a.goal=new Vector3(Mathf.Clamp(position.x+dx,-46f,46f),0,
+                    Mathf.Clamp(position.z+dz,-42f,42f));
+                count++;
+            }
         }
 
         private void AlignCamera()
@@ -410,20 +549,26 @@ namespace BlackAlert
             }
             if(clicked!=null && !clicked.enemy)
             {
-                if(selected!=null && selected.model!=null)
+                var matching=new List<Agent>();
+                if(Time.time-lastTapTime<.34f && lastTappedType==clicked.model.name)
                 {
-                    var oldRing=selected.model.transform.Find("Selection Ring");
-                    if(oldRing!=null) oldRing.gameObject.SetActive(false);
+                    foreach(var a in agents)if(!a.enemy && a.model!=null &&
+                        a.model.name==clicked.model.name && a.hp>0)
+                        matching.Add(a);
                 }
-                selected=clicked;
-                var newRing=clicked.model.transform.Find("Selection Ring");
-                if(newRing!=null) newRing.gameObject.SetActive(true);
+                else matching.Add(clicked);
+                ApplySelection(matching);
+                lastTappedType=clicked.model.name;
+                lastTapTime=Time.time;
                 return;
             }
-            if(selected!=null && selected.model!=null)
+            if(selectedGroup.Count>0)
             {
-                selected.goal=new Vector3(Mathf.Clamp(hit.point.x,-47,47),0,Mathf.Clamp(hit.point.z,-43,43));
-                if(clicked!=null && clicked.enemy) selected.goal=clicked.model.transform.position;
+                Vector3 target=new Vector3(Mathf.Clamp(hit.point.x,-47f,47f),0,
+                    Mathf.Clamp(hit.point.z,-43f,43f));
+                if(clicked!=null && clicked.enemy && clicked.model!=null)
+                    target=clicked.model.transform.position;
+                IssueGroupOrder(target);
             }
         }
 
@@ -622,7 +767,8 @@ namespace BlackAlert
                 " | Ore "+economy.Ore["Azure Ore Field"].Remaining+
                 " | Shots "+shotsFired+" | Time "+battleTime.ToString("0")+"s");
             GUI.Label(new Rect(20, 160, 700, 30), selected!=null&&selected.model!=null?
-                "Selected: "+selected.model.name:"Select an Azure unit to command");
+                "Selected ("+selectedGroup.Count+"): "+selected.model.name:
+                "Tap an Azure unit / double-tap same type / long-press and drag squad");
             if(GUI.Button(new Rect(20, 195, 195, 55), "QUEUE TANK $700"))
                 economy.QueueUnit("tank");
             if(GUI.Button(new Rect(20, 257, 195, 55), "RIFLEMAN $100"))
@@ -650,7 +796,15 @@ namespace BlackAlert
                 (economy.FirstQueuedUnit??"Idle")+" "+
                 economy.FirstQueueRemaining.ToString("0.0")+"s"+
                 (economy.LowPower?" | LOW POWER":""));
-            GUI.Label(new Rect(20,686,680,28),"Offline game systems test | final graphics + online pending");
+            GUI.Label(new Rect(20,686,680,28),"Offline test | squad selection, orders, production | full art pending");
+            if(dragSelect)
+            {
+                float x=Mathf.Min(dragOrigin.x,dragEndpoint.x);
+                float y=Screen.height-Mathf.Max(dragOrigin.y,dragEndpoint.y);
+                float width=Mathf.Abs(dragEndpoint.x-dragOrigin.x);
+                float height=Mathf.Abs(dragEndpoint.y-dragOrigin.y);
+                GUI.Box(new Rect(x,y,width,height),"SELECT SQUAD");
+            }
         }
     }
 }
