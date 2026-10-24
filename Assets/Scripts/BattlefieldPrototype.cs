@@ -119,6 +119,7 @@ namespace BlackAlert
             l.transform.rotation = Quaternion.Euler(48,-30,0);
             var go = new GameObject("RTS Camera");
             cam = go.AddComponent<Camera>();
+            go.AddComponent<AudioListener>();
             cam.clearFlags = CameraClearFlags.Skybox;
             cam.fieldOfView = 50;
             AlignCamera();
@@ -326,6 +327,7 @@ namespace BlackAlert
                 {
                     a.cooldown=a.infantry ? .8f : (a.naval ? 2.6f : 1.3f);
                     shotsFired++;
+                    BlackAlertSoundFx.Shot(position);
                     enemy.hp-=a.infantry?6f:a.naval?34f:18f;
                     if(enemy.hp<=0) {Object.Destroy(enemy.model);enemy.model=null;}
                     SpawnTracer(position+Vector3.up,enemy.model!=null?enemy.model.transform.position+Vector3.up:position+Vector3.forward*3);
